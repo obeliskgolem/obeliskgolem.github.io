@@ -2,3 +2,4 @@ drafts/*
 _site/*
 _cache/*
 dist/*
+*.o
