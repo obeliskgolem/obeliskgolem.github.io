@@ -7,7 +7,7 @@ jobs:
       - checkout
       - run: 
           name: Install Hakyll
-	  command: cabal install hakyll
+          command: cabal install hakyll
       - run:
           name: Build Site App
           command: cabal build 
