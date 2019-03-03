@@ -2,12 +2,15 @@ version: 2
 jobs:
   build:
     docker:
-      - image: fpco/stack-build:lts
+      - image: haskell
     steps:
       - checkout
+      - run: 
+          name: Install Hakyll
+	  command: cabal install hakyll
       - run:
           name: Build Site App
-          command: cabal build site
+          command: cabal build 
       - run:
           name: Generate Static Site
           command: cabal run site build
