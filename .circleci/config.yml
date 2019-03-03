@@ -15,8 +15,10 @@ jobs:
             # when missing reuse the latest cache
             - stack-
       - run:
-          name: Resolve/Update Dependencies
+          name: Resolve Dependencies
           command: stack setup
+      - run:
+          name: Build Dependencies
           command: stack build --dependencies-only
       - save_cache:
           name: Cache Dependencies
