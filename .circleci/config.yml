@@ -10,7 +10,7 @@ jobs:
           command: cabal update
       - run:
           name: Install Hakyll Package
-          command: cabal v2-install hakyll
+          command: cabal v2-install hakyll -j 1
       - run:
           name: Build Site App
           command: cabal build
