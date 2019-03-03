@@ -6,8 +6,11 @@ jobs:
     steps:
       - checkout
       - run: 
+          name: Update Hakyll
+          command: cabal update
+      - run: 
           name: Install Hakyll
-          command: cabal install hakyll
+          command: cabal new-install hakyll
       - run:
           name: Build Site App
           command: cabal build 
