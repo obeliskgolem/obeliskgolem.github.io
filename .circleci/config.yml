@@ -6,9 +6,6 @@ jobs:
     steps:
       - checkout
       - run:
-          name: to see the available memory
-          command: free -g
-      - run:
           name: Resolve Dependencies
           command: cabal update
       - run:
