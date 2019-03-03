@@ -5,33 +5,15 @@ jobs:
       - image: fpco/stack-build:lts
     steps:
       - checkout
-      - restore_cache:
-          name: Restore Cached Dependencies
-          keys:
-            # find a cache for the same stack.yaml
-            - stack-{{ .Branch }}-{{ checksum "stack.yaml" }}
-            # when missing reuse from the same branch
-            - stack-{{ .Branch }}-
-            # when missing reuse the latest cache
-            - stack-
       - run:
           name: Resolve Dependencies
-          command: stack setup
-      - run:
-          name: Build Dependencies
-          command: stack build --dependencies-only
-      - save_cache:
-          name: Cache Dependencies
-          key: stack-{{ .Branch }}-{{ checksum "stack.yaml" }}
-          paths:
-            - ~/.stack
-            - ./.stack-work
+          command: cabal update
       - run:
           name: Build Site App
-          command: stack build --pedantic
+          command: cabal build
       - run:
           name: Generate Static Site
-          command: stack exec site build
+          command: cabal run site build
       - run:
           name: Publish GitHub Pages
           working_directory: './_site'
