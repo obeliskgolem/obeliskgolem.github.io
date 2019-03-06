@@ -39,10 +39,10 @@ compiled using version 2.4.1.0 of the Cabal library
 
 ## 安装及配置Hakyll
 
-Hakyll的安装可以参考 _Hakyll Homepage_[^fn1]，很简单：
+Hakyll的安装可以参考[官网的教程](https://jaspervdj.be/hakyll/tutorials.html)，很简单：
 
 ```bash
-cabal install hakyll
+$ cabal install hakyll
 ```
 
 之后用`hakyll-init $sitedir`就建好了一个简单的站点目录。
@@ -104,12 +104,12 @@ border: 1px solid rgb(200,200,200);
 .sourceCode span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
 ```
 
-把上面的部分加入到`$sitedir/templates/default.html`中就大功告成啦。
+把上面的部分加入到`$sitedir/templates/default.html`中。
 ```html
 <link rel="stylesheet" href="/css/syntax.css" />
 ```
 
-Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文件做高亮，我感觉pandoc的解析总是有点问题。比如文章中这段：
+Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文件做高亮，但我感觉pandoc的解析总是有点问题。比如文章中这段：
 
 <div style="float:center">
 ![](/images/pandoc-syntax-fail.png){width=50%}
@@ -119,7 +119,7 @@ Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文
 
 
 ## Hakyll与Docker, Github，CircleCI的集成
-最后，我需要将站点与github pages同步，参考了 _Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI_ [^fn5] 以及 _How to Hakyll CircleCI 2.0_ [^fn3]。
+最后，我需要将站点与github pages同步，参考了 _Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI_ [^fn3] 以及 _How to Hakyll CircleCI 2.0_ [^fn4]。
 
 ### 设置Github Pages项目
 Github Pages只支持在master branch下的博客站点，而hakyll build后生成的静态站点文件都在`$sitedir/_site`目录下。文章中用的解决方法是建一个名为`hakyll`的分支，将本地的源文件推到该分支下。再通过CircleCI脚本编译后，将`./_site`目录推到master分支下。
@@ -158,20 +158,67 @@ WORKDIR /home
 ```
 
 按Dockerfile建立镜像：
+
 ```bash
 $ docker build .
 ```
 
-### 与CircleCI的集成
-
-2. _Integration with Circle CI_[^fn4]
-
-
-3. 编辑一下.circleci/config.yml，文中的镜像有stack没有cabal，而我用的是cabal build，所以docker源要换一个带cabal-install的源
+最后将docker image推送到docker hub，供CircleCI拉取。
 
 ```bash
-git push origin master
+$ docker login
+$ docker push obeliskgolem/hakyll-cabal-image
 ```
+
+### 与CircleCI的集成
+
+CircleCI与Github的集成也不过多赘述了，完成后编辑.circleci/config.yml文件，为CircleCI指定编译任务。
+
+```yaml
+version: 2
+jobs:
+  build:
+    docker:
+      - image: obeliskgolem/hakyll-cabal-image
+    steps:
+      # checkout the code in Github Pages project
+      - checkout
+
+      - run:
+          name: Generate Static Site
+          command: cabal run site build
+
+      - run:
+          name: Publish GitHub Pages
+          working_directory: './_site'
+          command: |
+            # initalize repo
+            git init
+            git config user.name  'obeliskgolem'
+            git config user.email 'obeliskgolem@circleci.com'
+            # add generated files
+            git add .
+            git commit -m "publish $CIRCLE_SHA1 [ci skip]"
+            # push to pages branch
+            git remote add origin "$CIRCLE_REPOSITORY_URL"
+            git push --force origin master
+```
+
+最后，将本地的站点源代码推送至Github仓库的hakyll分支：
+
+```bash
+$ git add --all
+$ git commit -m "circle ci integration"
+$ git push origin hakyll
+```
+
+经CircleCI编译后，静态站点被输出到`_site`目录。
+
+![](/images/circleci-result.png){width=30%}
+
+大功告成！
+
+![](/images/blog-screenshot.png){width=50%}
 
 ## TODOs
 
@@ -179,26 +226,29 @@ git push origin master
 2. 加入评论功能
 3. 自动生成rss feed
 4. pandoc语法解析改进
-5. 对CircleCI流程的改进：加入cache等功能
 
-## References
+## 参考文献，及一些可能有帮助的文档
+
 [^fn1]: [Hakyll Homepage](https://jaspervdj.be/hakyll/index.html)
 
-[^fn2]: [Pandoc Syntax Highlighting with CSS description](https://github.com/jeffbr13/benjeffrey.com/blob/master/posts/pandoc-syntax-highlighting-css.md)
+[^fn2]: [Hakyll CSS Garden](http://katychuang.com/hakyll-cssgarden/gallery/)
+
+[^fn3]: [Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI](https://www.stackbuilders.com/news/dr-hakyll-create-a-github-page-with-hakyll-and-circleci)
+
+[^fn4]: [How to Hakyll CircleCI 2.0](https://nazarii.bardiuk.com/posts/hakyll-circle.html)
 
 [Switching from Jekyll to Hakyll](http://mark.reid.name/blog/switching-to-hakyll.html)
 
 [ghcup](https://github.com/haskell/ghcup)
 
-[^fn3]: [How to Hakyll CircleCI 2.0](https://nazarii.bardiuk.com/posts/hakyll-circle.html)
-
-[^fn4]: [Integration with Circle CI](https://gaumala.com/posts/2019-01-22-continuous-integration-with-circle-ci.html)
-
-[^fn5]: [Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI](https://www.stackbuilders.com/news/dr-hakyll-create-a-github-page-with-hakyll-and-circleci)
 [ghc/cabal build out of memory](https://github.com/haskell/cabal/issues/2546)
 
 [ssh over socks5](https://ieevee.com/tech/2017/10/19/ssh-over-socks5.html)
 
 [https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker](https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker)
 
-[](https://futtetennismo.me/posts/hakyll/2017-10-22-deploying-to-github-pages-using-circleci-2.0.html)
+[Deploying a Hakyll website using Github Pages and CircleCI 2.0](https://futtetennismo.me/posts/hakyll/2017-10-22-deploying-to-github-pages-using-circleci-2.0.html)
+
+[Integration with Circle CI](https://gaumala.com/posts/2019-01-22-continuous-integration-with-circle-ci.html)
+
+[Pandoc Syntax Highlighting with CSS description](https://github.com/jeffbr13/benjeffrey.com/blob/master/posts/pandoc-syntax-highlighting-css.md)
