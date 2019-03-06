@@ -2,21 +2,15 @@ version: 2
 jobs:
   build:
     docker:
-      - image: haskell
+      - image: obeliskgolem/hakyll-cabal-image
     steps:
+      # checkout the code in Github Pages project
       - checkout
-      - run:
-          name: Resolve Dependencies
-          command: cabal update
-      - run:
-          name: Install Hakyll Package
-          command: cabal v2-install hakyll --jobs=1
-      - run:
-          name: Build Site App
-          command: cabal build
+
       - run:
           name: Generate Static Site
           command: cabal run site build
+
       - run:
           name: Publish GitHub Pages
           working_directory: './_site'

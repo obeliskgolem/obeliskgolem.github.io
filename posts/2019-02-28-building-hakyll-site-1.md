@@ -9,7 +9,7 @@ Hakyll是一个静态的站点生成框架，written by Haskell，更多的信�
 
 ## GHC/Cabal环境搭建
 
-要使用Hakyll，首先必须在本机上配置好Haskell的编译环境。感谢万能的github，让我找到了ghcup工具。比起Haskell官网的Haskell Platform来说，ghcup提供了更为小巧便捷的配置方式。（Haskell Platform在reddiet上已经被diss了）。
+要使用Hakyll，首先必须在本机上配置好Haskell的编译环境。感谢万能的github，让我找到了ghcup工具。比起Haskell官网的Haskell Platform来说，ghcup提供了更为简单明了的配置方式。（[Haskell Platform as the default recommendation considered harmful](https://mail.haskell.org/pipermail/haskell-community/2015-September/000014.html)）。
 
 按ghcup的说明文档，首先通过脚本下载及编译ghc/cabal：
 
@@ -35,7 +35,7 @@ cabal-install version 2.4.1.0
 compiled using version 2.4.1.0 of the Cabal library
 ```
 
-配置中途出过一个问题，cabal编译所需要的内存太多。按stackoverflow上的方法，添加了一些swap space后解决。
+配置中途出过一个问题，cabal编译所需要的内存太多。按[stackoverflow上的方法](https://stackoverflow.com/a/28207691)，添加了一些swap space后解决。
 
 ## 安装及配置Hakyll
 
@@ -45,7 +45,7 @@ Hakyll的安装可以参考 _Hakyll Homepage_[^fn1]，很简单：
 cabal install hakyll
 ```
 
-之后用`hakyll-init sitedir`就建好了一个简单的站点目录。
+之后用`hakyll-init $sitedir`就建好了一个简单的站点目录。
 
 ## 一些自定义配置
 
@@ -118,8 +118,54 @@ Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文
 高亮颜色就不对。只能以后自己慢慢调整了。
 
 
-## Hakyll与Github，CircleCI的集成
-最后，将站点与github pages同步：
+## Hakyll与Docker, Github，CircleCI的集成
+最后，我需要将站点与github pages同步，参考了 _Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI_ [^fn5] 以及 _How to Hakyll CircleCI 2.0_ [^fn3]。
+
+### 设置Github Pages项目
+Github Pages只支持在master branch下的博客站点，而hakyll build后生成的静态站点文件都在`$sitedir/_site`目录下。文章中用的解决方法是建一个名为`hakyll`的分支，将本地的源文件推到该分支下。再通过CircleCI脚本编译后，将`./_site`目录推到master分支下。
+
+```bash
+$ mkdir username.github.io/
+$ cd username.github.io/
+$ git init
+$ git commit --allow-empty -m "Create master branch"
+$ git remote add origin git@github.com:username/username.github.io.git
+$ git push -u origin master
+
+$ git checkout --orphan hakyll
+
+$ git submodule add git@github.com:username/username.github.io.git _site
+$ git commit -m "Create hakyll branch"
+$ git push -u origin hakyll
+```
+
+### 创建自己的docker image
+CircleCI可以对静态站点进行编译并将结果推送至。然而编译之前需要安装ghc/cabal以及hakyll的库，这个过程会很费时间。因此在集成CircleCI之前，需要先建立一个自己的docker image，将编译所需要的库文件都放进去，节约CircleCI build的时间。
+
+如何安装docker不赘述了，可以参考官方的文档[Get Docker CE for Debian](https://docs.docker.com/install/linux/docker-ce/debian/)。用了一台debian的vps做这个事情。
+
+docker安装好后，编写自己的Dockerfile拉取官方的docker image（我使用的是library/haskell），并加入hakyll库。这些步骤保存在Dockerfile里。
+
+```dockerfile
+FROM haskell
+
+RUN cabal update
+RUN cabal install hakyll -j1
+
+WORKDIR /home
+```
+
+按Dockerfile建立镜像：
+```bash
+$ docker build -t Dockerfile
+```
+
+### 与CircleCI的集成
+
+2. _Integration with Circle CI_[^fn4]
+
+
+3. 编辑一下.circleci/config.yml，文中的镜像有stack没有cabal，而我用的是cabal build，所以docker源要换一个带cabal-install的源
 
 ```bash
 git push origin master
@@ -130,8 +176,8 @@ git push origin master
 1. 加入草稿功能
 2. 加入评论功能
 3. 自动生成rss feed
-4. pandoc语法解析
-5. 图片自动居中并调整大小
+4. pandoc语法解析改进
+5. 对CircleCI流程的改进：加入cache等功能
 
 ## References
 [^fn1]: [Hakyll Homepage](https://jaspervdj.be/hakyll/index.html)
@@ -142,4 +188,15 @@ git push origin master
 
 [ghcup](https://github.com/haskell/ghcup)
 
-[](https://gaumala.com/posts/2019-01-22-continuous-integration-with-circle-ci.html)
+[^fn3]: [How to Hakyll CircleCI 2.0](https://nazarii.bardiuk.com/posts/hakyll-circle.html)
+
+[^fn4]: [Integration with Circle CI](https://gaumala.com/posts/2019-01-22-continuous-integration-with-circle-ci.html)
+
+[^fn5]: [Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI](https://www.stackbuilders.com/news/dr-hakyll-create-a-github-page-with-hakyll-and-circleci)
+[ghc/cabal build out of memory](https://github.com/haskell/cabal/issues/2546)
+
+[ssh over socks5](https://ieevee.com/tech/2017/10/19/ssh-over-socks5.html)
+
+[https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker](https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker)
+
+[](https://futtetennismo.me/posts/hakyll/2017-10-22-deploying-to-github-pages-using-circleci-2.0.html)
