@@ -149,6 +149,8 @@ docker安装好后，编写自己的Dockerfile拉取官方的docker image（我�
 ```dockerfile
 FROM haskell
 
+RUN apt-get update && apt-get install -y ssh && apt-get install git
+
 RUN cabal update
 RUN cabal install hakyll -j1
 
@@ -157,7 +159,7 @@ WORKDIR /home
 
 按Dockerfile建立镜像：
 ```bash
-$ docker build -t Dockerfile
+$ docker build .
 ```
 
 ### 与CircleCI的集成
