@@ -112,7 +112,7 @@ border: 1px solid rgb(200,200,200);
 Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文件做高亮，但我感觉pandoc的解析总是有点问题。比如文章中这段：
 
 <div style="float:center">
-![](/images/pandoc-syntax-fail.png){width=50%}
+![](/images/pandoc-syntax-fail.png){width=70%}
 </div>
 
 高亮颜色就不对。只能以后自己慢慢调整了。
@@ -214,11 +214,11 @@ $ git push origin hakyll
 
 经CircleCI编译后，静态站点被输出到`_site`目录。
 
-![](/images/circleci-result.png){width=30%}
+![](/images/circleci-result.png){width=70%}
 
 大功告成！
 
-![](/images/blog-screenshot.png){width=50%}
+![](/images/blog-screenshot.png){width=100%}
 
 ## TODOs
 
