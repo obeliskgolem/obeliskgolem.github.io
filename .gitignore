@@ -4,3 +4,4 @@ _cache/*
 dist/*
 *.o
 .DS_Store
+dist-newstyle/*

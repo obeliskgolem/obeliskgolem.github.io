@@ -22,14 +22,14 @@ main = hakyll $ do
     match (fromList ["about.rst", "contact.markdown"]) $ do
         route   $ setExtension "html"
         compile $ pandocCompiler
-            >>= loadAndApplyTemplate "templates/default.html" defaultContext
+            >>= loadAndApplyTemplate defaultHtml defaultContext
             >>= relativizeUrls
 
     match "posts/*" $ do
         route $ setExtension "html"
         compile $ pandocCompiler
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
-            >>= loadAndApplyTemplate "templates/default.html" postCtx
+            >>= loadAndApplyTemplate defaultHtml postCtx
             >>= relativizeUrls
 
     create ["archive.html"] $ do
@@ -43,7 +43,7 @@ main = hakyll $ do
 
             makeItem ""
                 >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
-                >>= loadAndApplyTemplate "templates/default.html" archiveCtx
+                >>= loadAndApplyTemplate defaultHtml archiveCtx
                 >>= relativizeUrls
 
 
@@ -58,7 +58,7 @@ main = hakyll $ do
 
             getResourceBody
                 >>= applyAsTemplate indexCtx
-                >>= loadAndApplyTemplate "templates/default.html" indexCtx
+                >>= loadAndApplyTemplate defaultHtml indexCtx
                 >>= relativizeUrls
 
     match "templates/*" $ compile templateBodyCompiler
@@ -70,6 +70,8 @@ postCtx =
     dateField "date" "%B %e, %Y" `mappend`
     defaultContext
 --------------------------------------------------------------------------------
+defaultHtml :: Identifier 
+defaultHtml = fromFilePath "templates/pure_default.html"
 {-
 syntaxPandocCompiler :: Compiler (Item String)
 syntaxPandocCompiler = pandocCompilerWith syntaxHakyllReaderOptions defaultHakyllWriterOptions
