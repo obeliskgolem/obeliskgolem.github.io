@@ -1,6 +1,6 @@
 ---
 layout: article
-categories: Project
+categories: Article
 title: GitHub Pages Initiates
 ---
 
@@ -21,3 +21,5 @@ jekyll，安装
 主题，挑选
 
 github pages，启动
+
+<!--more-->

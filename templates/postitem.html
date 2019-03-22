@@ -1,0 +1,21 @@
+<ul>
+    $for(posts)$
+        <li class="post_item">
+            <section>
+                <header class="post-header">
+                    $if(categories)$
+                        <img width="48" height="48" src="/images/categories/$categories$.png" class="post-teaser-img"></img>
+                    $else$
+                        <img width="48" height="48" src="/images/categories/haskell.png" class="post-teaser-img"></img>
+                    $endif$
+                    <a class="post-title" href="$url$">$title$</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser">$teaser$</p>
+                    <a href="$url$">Read more</a>
+                </div>
+            </section>
+        </li>
+    $endfor$
+</ul>

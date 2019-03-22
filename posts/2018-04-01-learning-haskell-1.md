@@ -1,13 +1,15 @@
 ---
 layout: article
-categories: Technology
-tags: haskell Language
+categories: Haskell
+tags: haskell
 title: Haskell 自学笔记1：Functor, Applicative Functor, Monoid, Monad
 ---
 
 光看书，这些概念实在是有点绕，借用GitHub Pages整理归纳一下。初学Haskell，还没怎么正式用过，理解上的偏差无可避免。如果有任何错误或遗漏，在后续的博客中改正。
 
 以下内容主要参考 _Learn you a Haskell for great good_[^fn1].
+
+<!--more-->
 
 ## 什么是Functor（函子）？
 

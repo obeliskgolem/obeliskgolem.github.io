@@ -114,3 +114,10 @@ article h1 {
     width: 70%;
     margin: 0 auto;
 }
+
+.teaser {
+    padding: 0 48px 20px;
+    font-size: 24px;
+    width: 70%;
+    margin: 0 auto;
+}

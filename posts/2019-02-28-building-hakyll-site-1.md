@@ -1,15 +1,18 @@
 -----------
 title: 用Hakyll搭建静态博客
+categories: Haskell
+tags: haskell
 -----------
 
-## 背景
 去年开始对Haskell感兴趣，惭愧的是后来有段时间较忙就把它放下了，这次决定重新学习一遍。没有什么比看书+动手更好的学习方式了，用Hakyll重新搭建github pages似乎是一个很好的起点，于是就开始吧。
 
 Hakyll是一个静态的站点生成框架，written by Haskell，更多的信息可以参考 _Hakyll Homepage_[^fn1]。
 
+<!--more-->
+
 ## GHC/Cabal环境搭建
 
-要使用Hakyll，首先必须在本机上配置好Haskell的编译环境。感谢万能的github，让我找到了ghcup工具。比起Haskell官网的Haskell Platform来说，ghcup提供了更为简单明了的配置方式。（[Haskell Platform as the default recommendation considered harmful](https://mail.haskell.org/pipermail/haskell-community/2015-September/000014.html)）。
+要使用Hakyll，首先必须在本机上配置好Haskell的编译环境。感谢万能的github，我找到了ghcup工具。比起Haskell官网的Haskell Platform来说，ghcup提供了更为简单明了的配置方式。（[Haskell Platform as the default recommendation considered harmful](https://mail.haskell.org/pipermail/haskell-community/2015-September/000014.html)）。
 
 按ghcup的说明文档，首先通过脚本下载及编译ghc/cabal：
 
@@ -140,7 +143,7 @@ $ git push -u origin hakyll
 ```
 
 ### 创建自己的docker image
-CircleCI可以对静态站点进行编译并将结果推送至。然而编译之前需要安装ghc/cabal以及hakyll的库，这个过程会很费时间。因此在集成CircleCI之前，需要先建立一个自己的docker image，将编译所需要的库文件都放进去，节约CircleCI build的时间。
+CircleCI可以对静态站点进行编译并将结果推送至github。然而编译之前需要安装ghc/cabal以及hakyll的库，这个过程会很费时间。因此在集成CircleCI之前，需要先建立一个自己的docker image，将编译所需要的库文件都放进去，节约CircleCI build的时间。
 
 如何安装docker不赘述了，可以参考官方的文档[Get Docker CE for Debian](https://docs.docker.com/install/linux/docker-ce/debian/)。用了一台debian的vps做这个事情。
 

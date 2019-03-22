@@ -11,6 +11,10 @@ main = hakyll $ do
         route   idRoute
         compile copyFileCompiler
 
+    match "images/categories/*" $ do
+        route   idRoute
+        compile copyFileCompiler
+
     match "css/*" $ do
         route   idRoute
         compile compressCssCompiler
@@ -28,6 +32,7 @@ main = hakyll $ do
     match "posts/*" $ do
         route $ setExtension "html"
         compile $ pandocCompiler
+            >>= saveSnapshot "content"
             >>= loadAndApplyTemplate "templates/post.html"    postCtx
             >>= loadAndApplyTemplate defaultHtml postCtx
             >>= relativizeUrls
@@ -42,7 +47,7 @@ main = hakyll $ do
                     defaultContext
 
             makeItem ""
-                >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
+                >>= loadAndApplyTemplate "templates/post-list.html" archiveCtx
                 >>= loadAndApplyTemplate defaultHtml archiveCtx
                 >>= relativizeUrls
 
@@ -51,9 +56,11 @@ main = hakyll $ do
         route idRoute
         compile $ do
             posts <- recentFirst =<< loadAll "posts/*"
+            teasers <- recentFirst =<< loadAllSnapshots "posts/*" "content"
             let indexCtx =
                     listField "posts" postCtx (return posts) `mappend`
-                    constField "title" "Home"                `mappend`
+                    constField "title" ""                `mappend`
+                    listField "teasers" (bodyField "content" `mappend` postCtx) (return teasers) `mappend`
                     defaultContext
 
             getResourceBody
@@ -68,6 +75,7 @@ main = hakyll $ do
 postCtx :: Context String
 postCtx =
     dateField "date" "%B %e, %Y" `mappend`
+    teaserField "teaser" "content" `mappend`
     defaultContext
 --------------------------------------------------------------------------------
 defaultHtml :: Identifier 

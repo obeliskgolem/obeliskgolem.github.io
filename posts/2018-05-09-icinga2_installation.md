@@ -5,6 +5,10 @@ tags: icinga2
 title: Icinga2 安装手记
 ---
 
+Icinga 2 是一个基于Nagios插件之上的一个监控框架。
+
+<!--more-->
+
 ## 安装指令
 
 For CentOS 7
@@ -24,6 +28,7 @@ For CentOS 7
 
 安装插件
 `# yum install nagios-plugins-all`
+
 
 ## 运行Icinga
 

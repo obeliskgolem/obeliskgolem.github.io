@@ -14,7 +14,7 @@ a:focus {
 }
 
 h3 {
-    font-weight: 100;
+/*    font-weight: 100;*/
 }
 
 /* LAYOUT CSS */
@@ -99,9 +99,17 @@ h3 {
 }
 .post-avatar {
     border-radius: 50px;
-    float: right;
+    float: left;
     margin-left: 1em;
 }
+
+.post-teaser-img {
+    border: 50px;
+    float: left;
+    margin-left: 1em;
+    margin-right: 2em;
+}
+
 .post-description {
     font-family: Georgia, "Cambria", serif;
     color: #444;
