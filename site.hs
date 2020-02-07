@@ -60,7 +60,7 @@ main = hakyll $ do
             let indexCtx =
                     listField "posts" postCtx (return posts) `mappend`
                     constField "title" ""                `mappend`
-                    listField "teasers" (bodyField "content" `mappend` postCtx) (return teasers) `mappend`
+                    listField "teaser" (bodyField "content" `mappend` postCtx) (return teasers) `mappend`
                     defaultContext
 
             getResourceBody

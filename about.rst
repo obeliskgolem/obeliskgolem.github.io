@@ -1,4 +1,4 @@
 ---
 title: About
 ---
-This page is under construction...
+A blog written by a Haskell amateur.

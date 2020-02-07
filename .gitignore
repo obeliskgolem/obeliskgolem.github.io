@@ -5,3 +5,5 @@ dist/*
 *.o
 .DS_Store
 dist-newstyle/*
+dist/*
+.circleci/*
