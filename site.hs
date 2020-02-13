@@ -7,7 +7,7 @@ import           Hakyll
 --------------------------------------------------------------------------------
 main :: IO ()
 main = hakyll $ do
-    match "images/*" $ do
+    match ("images/*" .||. "favicon.ico") $ do
         route   idRoute
         compile copyFileCompiler
 
@@ -71,6 +71,13 @@ main = hakyll $ do
 
     match "templates/*" $ compile templateBodyCompiler
 
+    create ["rss.xml"] $ do
+        route idRoute
+        compile $ do
+            loadAllSnapshots "posts/*" "content"
+                >>= fmap (take 10) . recentFirst
+                >>= renderRss (feedConfiguration "All posts") feedCtx
+
 
 --------------------------------------------------------------------------------
 postCtx :: Context String
@@ -78,6 +85,25 @@ postCtx =
     dateField "date" "%B %e, %Y" `mappend`
     teaserField "teaser" "content" `mappend`
     defaultContext
+
+--------------------------------------------------------------------------------
+feedConfiguration :: String -> FeedConfiguration
+feedConfiguration title = FeedConfiguration
+    { feedTitle       = "OB's Blog - " ++ title
+    , feedDescription = "THUS SPAKE OBELISK"
+    , feedAuthorName  = "obeliskgolem"
+    , feedAuthorEmail = "obelisk.golem@gmail.com"
+    , feedRoot        = "https://obeliskgolem.github.io"
+    }
+
+feedCtx :: Context String
+feedCtx = mconcat
+    [ bodyField "description"
+    , Context $ \key -> case key of
+        "title" -> unContext (mapContext escapeHtml defaultContext) key
+        _       -> unContext mempty key
+    , defaultContext
+    ]
 --------------------------------------------------------------------------------
 defaultHtml :: Identifier 
 defaultHtml = fromFilePath "templates/pure_default.html"
