@@ -87,6 +87,7 @@ h3 {
 
 .content {
     padding: 2em 1em 0;
+    margin-right: 15%;
 }
 
 .post {
@@ -193,14 +194,22 @@ article {
 article h1 {
     font-size: 24px;
     margin: 0 auto;
+    margin-top: 5%;
 }
 
 article h2 {
     font-size: 20px;
     margin: 0 auto;
+    margin-top: 2%;
+    margin-bottom: 2%;
 }
 
 article h3 {
     font-size: 16px;
     margin: 0 auto;
+}
+
+ol {
+    padding-left: 0;
+    margin-bottom: 5%;
 }
