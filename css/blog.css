@@ -58,7 +58,7 @@ a:focus {
 }
 .nav-item a {
     background: transparent;
-    border: 2px solid rgb(176, 202, 219);
+    /* border: 2px solid rgb(176, 202, 219); */
     color: #fff;
     margin-top: 1em;
     letter-spacing: 0.05em;
@@ -67,7 +67,7 @@ a:focus {
 }
 .nav-item a:hover,
 .nav-item a:focus {
-    border: 2px solid rgb(61, 146, 201);
+    /* border: 2px solid rgb(61, 146, 201); */
     text-decoration: none;
 }
 

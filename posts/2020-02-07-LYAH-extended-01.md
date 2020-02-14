@@ -8,7 +8,7 @@ teaser: Haskell
 # Dependent Types
 
 
-GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haskell。什么是Dependent Types？简单的说就是依赖于值的类型(types depend on values)。例如`[a]`(或者说`List a`)在Haskell中是一个列表，它的类型取决于传入的类型(depend on types)而不是传入的值(depend on values)，它可以是`[Int]`，`[Bool]`等等。但当有一些额外的要求时，比如我要定义一个列表类型，这个类型的列表长度大于3(`List n a where n > 3`)，一般来说Haskell是做不到这一点的。很容易想到，这种依赖于值的类型有助于编写更加健壮的程序，很多运行时的bug可以在程序的编译期规避掉，比如如果我有一个保证非零的整数类型，那我可以避免除以零的bug；如果我有非空的列表类型，那可以避免对空列表求`head`导致的Exception等。
+GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haskell。什么是Dependent Types？简单的说就是依赖于值的类型(types depend on values)。例如`[a]`(或者说`List a`)在Haskell中是一个列表，它的类型取决于传入的类型(depend on types)而不是传入的值(depend on values)，它可以是`[Int]`，`[Bool]`等等。但当有一些额外的要求时，比如我要定义一个列表类型，这个类型的列表长度大于3(`List n a where n > 3`)，一般来说Haskell是做不到这一点的。很容易想到，这种依赖于值的类型有助于编写更加健壮的程序，很多运行时的bug可以在程序的编译期规避掉，比如如果我有一个保证非零的整数类型，那我可以避免除以零的bug；如果我有非空的列表类型，那可以避免对空列表求`head`导致的Exception等。
 
 <!--more-->
 
@@ -62,7 +62,7 @@ Prelude > data Foo2 = forall a. MkFoo2 a    -- OK
 MkFoo2 :: forall a. a -> Foo2               -- 存在某些a，可以用来构造Foo2
 ```
 
-这么写，用起来就麻烦了，因为不知道`a`是什么。所以要使用存在量化一般会跟上constraints，或者利用构造器内提供的各种函数。
+这么写，用起来就麻烦了，因为不知道`a`是什么。所以要使用存在量化一般会跟上constraints，或者利用构造器内提供的各种函数。
 
 ``` haskell
 fFoo2 :: Foo2 -> Bool
