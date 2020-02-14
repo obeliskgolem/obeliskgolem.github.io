@@ -108,7 +108,7 @@ a:focus {
 }
 
 .post-description {
-    font-family: Georgia, "Cambria", serif;
+    font-family: sans-serif;
     color: #444;
     line-height: 1.8em;
 }
@@ -208,4 +208,10 @@ article h3 {
 ol {
     padding-left: 0;
     margin-bottom: 5%;
+}
+
+blockquote {
+    border: 2px solid blue;
+    background-color: cornsilk;
+    padding-left: 5%;
 }

@@ -84,6 +84,8 @@ data Foo = MkFoo (exists a . (a, a -> Bool))
 
 可以参考：
 
+[GHC Manual: ExistentialQuantification](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#existentially-quantified-data-constructors)
+
 [What does the `forall` keyword in Haskell/GHC do?](https://stackoverflow.com/questions/3071136/what-does-the-forall-keyword-in-haskell-ghc-do)
 
 [Existential quantification](https://markkarpov.com/post/existential-quantification.html)
@@ -188,6 +190,8 @@ main = print y
 
 可以参考：
 
+[GHC Manual: Arbitrary-rank polymorphism](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#arbitrary-rank-polymorphism)
+
 [Wikibook: Haskell/Polymorphism](https://en.wikibooks.org/wiki/Haskell/Polymorphism)
 
 [Wikibook: Haskell/Mutable objects](https://en.wikibooks.org/wiki/Haskell/Mutable_objects#The_ST_monad)
@@ -195,7 +199,49 @@ main = print y
 [Lazy Functional State Thread](https://www.microsoft.com/en-us/research/wp-content/uploads/1994/06/lazy-functional-state-threads.pdf)
 
 ## GADTs
-TODO
+
+GADT的全称是Generalized Algebraic Data Types。Haskell构造类型的时候可以使用Sum和Product等方式，Algebraic Data Types指使用代数式的方法构造的类型(Sum，Product等都和类型的inhabitantility相关)。
+
+``` haskell
+data Bool = True | False      -- Sum Type
+data Pair = (Int, Bool)       -- Product Type
+data AFunc = Int -> Bool      -- Func Type
+```
+
+构造类型的时候也可以接受类型变量作为参数。
+
+``` haskell
+data Maybe a = Nothing | Just a
+```
+
+如果要让构造器根据`a`的某些类型返回不同的类型呢？Haskell提供了**GADT(Generalized Algebraic Data Types)**这种方式，如下看到`Eq`构造器返回的结果和作为参数的类型变量`a`已经无关了。这样做的优点在于构造器可以自由选择返回类型，并且后续做pattern matching的时候，GHC能根据构造器推导出`a`的类型。
+
+``` haskell
+data Expr a where
+    I   :: Int  -> Expr Int
+    B   :: Bool -> Expr Bool
+    Add :: Expr Int -> Expr Int -> Expr Int
+    Mul :: Expr Int -> Expr Int -> Expr Int
+    Eq  :: Eq a => Expr a -> Expr a -> Expr Bool
+
+eval :: Expr a -> a
+eval (I n) = n
+eval (B b) = b
+eval (Add e1 e2) = eval e1 + eval e2        -- Add构造器只接受Expr Int
+                                            -- GHC推导出e1, e2均为Int，允许做加法
+eval (Mul e1 e2) = eval e1 * eval e2
+eval (Eq  e1 e2) = eval e1 == eval e2       -- 同理，e1, e2类型均为Eq的instance
+```
+
+可以参考：
+
+[GHC Manual: GADTs](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#generalised-algebraic-data-types-gadts)
+
+[Simple unification-based type inference for GADTs](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/gadt-pldi.pdf)
+
+[Generalized Algebraic Data Types and Data Kinds](https://andre.tips/wmh/generalized-algebraic-data-types-and-data-kinds/)
+
+[Wikibook: Haskell/GADT](https://en.wikibooks.org/wiki/Haskell/GADT)
 
 ## DataKinds
 TODO
@@ -213,3 +259,17 @@ TODO
 [Wiki: Dependent type](https://en.wikipedia.org/wiki/Dependent_type)
 
 [Intuitionistic Type Theory](https://plato.stanford.edu/entries/type-theory-intuitionistic/)
+
+[Research papers/Type systems](https://wiki.haskell.org/Research_papers/Type_systems)
+
+
+>This post is highly inspired by Ollie Charles's *24 Days of GHC Extensions* series. See also:
+>
+>[24 Days of GHC Extensions: Existential Quantification](https://ocharles.org.uk/guest-posts/2014-12-19-existential-quantification.html)
+>
+>[24 Days of GHC Extensions: Rank N Types](https://ocharles.org.uk/guest-posts/2014-12-18-rank-n-types.html)
+>
+>[24 Days of GHC Extensions: Type Families](https://ocharles.org.uk/posts/2014-12-12-type-families.html)
+
+
+
