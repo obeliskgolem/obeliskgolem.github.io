@@ -14,7 +14,7 @@ GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haske
 
 目前为止，Haskell还没有实现完整的对Dependent Types的支持。不过GHC已经做了很多扩展使得部分需求可以实现了。来看一下这些语法扩展：
 
-## ExistentialQuantification
+# ExistentialQuantification
 Existential Quantification翻译为存在量化。这个扩展和Dependent Types没啥关系，不过可以放在一起说一下。
 
 对于类型变量，如果不做其他声明，Haskell默认有一个隐藏的全称量化(Universal Quantification)。例如
@@ -56,7 +56,7 @@ Prelude > :set -XExistentialQuantification
 Prelude > data Foo2 = forall a. MkFoo2 a    -- OK
 ```
 
-别忘了类型构造器实际上就是函数。因此我们有
+别忘了构造器实际上就是函数。因此我们有
 
 ``` haskell
 MkFoo2 :: forall a. a -> Foo2               -- 存在某些a，可以用来构造Foo2
@@ -91,7 +91,7 @@ data Foo = MkFoo (exists a . (a, a -> Bool))
 [Existential quantification](https://markkarpov.com/post/existential-quantification.html)
 
 
-## RankNTypes
+# RankNTypes
 
 `forall`关键词除了用于存在量化，还有一个常见的使用方式，就是rank-n-polymorphism，直译的话叫N阶多态。这里的多态和OOP中的多态不同，指对于函数参数类型的多态性(parametric polymorphism)。还是以`id`为例子，一般的带类型变量的多态函数我们写成
 
@@ -170,8 +170,6 @@ Prelude Control.Monad.ST Data.STRef > v = runST $ newSTRef True
 虽然我们可以通过`newSTRef True`拿到一个`ST s (STRef s Bool)`，但因为括号里的`s`和前面的`s`相关，此时`a = STRef s Bool`。`runST`对`a`的全称量化`forall a.`等价于`forall s. STRef s Bool`，而根据前面说的，`runST`无法量化`s`。要正确的使用`runST`，确保它不负责指定状态线程`s`。
 
 ``` haskell
-{-# LANGUAGE RankNTypes #-}
-
 import Control.Monad.ST
 import Data.STRef
 
@@ -198,9 +196,9 @@ main = print y
 
 [Lazy Functional State Thread](https://www.microsoft.com/en-us/research/wp-content/uploads/1994/06/lazy-functional-state-threads.pdf)
 
-## GADTs
+# GADTs
 
-GADT的全称是Generalized Algebraic Data Types。Haskell构造类型的时候可以使用Sum和Product等方式，Algebraic Data Types指使用代数式的方法构造的类型(Sum，Product等都和类型的inhabitantility相关)。
+**GADT**的全称是**Generalized Algebraic Data Types**。Haskell构造类型的时候可以使用Sum和Product等方式，Algebraic Data Types指使用代数式的方法构造的类型(Sum，Product等名称和类型的inhabitantility有关)。
 
 ``` haskell
 data Bool = True | False      -- Sum Type
@@ -208,16 +206,18 @@ data Pair = (Int, Bool)       -- Product Type
 data AFunc = Int -> Bool      -- Func Type
 ```
 
-构造类型的时候也可以接受类型变量作为参数。
+构造类型的时候也可以接受类型变量作为参数，这里可以注意到构造器的返回类型总是全称量化的。
 
 ``` haskell
 data Maybe a = Nothing | Just a
 ```
 
-如果要让构造器根据`a`的某些类型返回不同的类型呢？Haskell提供了**GADT(Generalized Algebraic Data Types)**这种方式，如下看到`Eq`构造器返回的结果和作为参数的类型变量`a`已经无关了。这样做的优点在于构造器可以自由选择返回类型，并且后续做pattern matching的时候，GHC能根据构造器推导出`a`的类型。
+如果要让构造器根据`a`的某些类型返回不同的类型呢？Haskell提供了GADT这种方式，如下看到`Eq`构造器返回的结果和作为参数的类型变量`a`已经无关了。这样做的优点在于构造器可以自由选择返回类型，并且后续做pattern matching的时候，GHC能根据构造器推导出`a`的类型。不过，返回的类型还得和声明的数据类型形式相同，不能在声明`A`类型的构造器时返回`B`类型。
 
 ``` haskell
-data Expr a where
+{-# LANGUAGE GADTs #-}
+
+data Expr a where               -- 构造器返回类型必须具有Expr a的形式
     I   :: Int  -> Expr Int
     B   :: Bool -> Expr Bool
     Add :: Expr Int -> Expr Int -> Expr Int
@@ -233,6 +233,15 @@ eval (Mul e1 e2) = eval e1 * eval e2
 eval (Eq  e1 e2) = eval e1 == eval e2       -- 同理，e1, e2类型均为Eq的instance
 ```
 
+之前提到的存在量化，也可以用GADT实现：
+
+``` haskell
+data Foo = forall a. MkFoo a
+-- 等价
+data Foo where
+  MkFoo :: a -> Foo
+```
+
 可以参考：
 
 [GHC Manual: GADTs](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#generalised-algebraic-data-types-gadts)
@@ -243,16 +252,63 @@ eval (Eq  e1 e2) = eval e1 == eval e2       -- 同理，e1, e2类型均为Eq的i
 
 [Wikibook: Haskell/GADT](https://en.wikibooks.org/wiki/Haskell/GADT)
 
-## DataKinds
+# DataKinds
+Data, Type, Kind是Haskell的三个抽象层次。在Haskell中，类型的类型被称为Kind。例如`Int`, `Bool`, `Int -> String`这些类型都有着`*` Kind，接受类型变量并构造新类型的类型（例如`Maybe a`，`Either a b`）有着Kind `* -> *`, `* -> * -> *`等。实际上，Haskell的Kind只有这几种(GHC另有一种`#` Kind用来表示unboxed types)。GHC为丰富Haskell的Kinds，提供了`DataKinds`扩展。顾名思义，`DataKinds`就是把`data`声明的类型同时也提升为Kind，通过在构造器名前加上单引号`'`，把它的构造器提升为类型构造器（之前是值构造器）。
+
+很容易想到，既然Kind是类型的类型，它最大的用处应该是检查类型构造的合法性。当我们用类型变量来构造类型的时候，可以给传入的变量一个限制，而这个限制就是Kind。例如
+
+``` haskell
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}       -- 允许使用*,#表示Kind
+{-# LANGUAGE GADTs #-}
+
+data AList a = AEmpty | AListCons a (AList a)       -- AList has kind (* -> *)
+
+data TypeLevelList :: AList * -> * where
+  EmptyList :: TypeLevelList 'AEmpty                -- 'AEmpty is a type now. It's type is AList a
+  TL :: a -> TypeLevelList as -> TypeLevelList ('AListCons a as)
+                                                    -- TL接受一个类型和一个类型列表，返回更长的类型列表
+
+*Main > :type AListCons                         -- AListCons is a type (value constructor)
+AListCons :: a -> AList a -> AList a
+*Main > :kind 'AListCons                        -- 'AListCons is a kind (type constructor)
+'AListCons :: a -> AList a -> AList a
+
+*Main > :type TL
+TL :: a -> TypeLevelList as -> TypeLevelList ('AListCons a as)
+
+*Main > :type EmptyList
+EmptyList :: TypeLevelList 'AEmpty
+
+*Main > :type (TL 1 EmptyList)
+(TL 1 EmptyList) :: Num a => TypeLevelList ('AListCons a 'AEmpty)
+
+*Main > :type (TL 1 (TL True (TL "Hello World!" EmptyList)))
+(TL 1 (TL True (TL "Hello World!" EmptyList)))
+  :: Num a =>
+     TypeLevelList
+       ('AListCons a ('AListCons Bool ('AListCons [Char] 'AEmpty)))
+
+
+```
+
+事实上Haskell已经提供了type level list的包：[HList](https://hackage.haskell.org/package/HList)。
+
+可以参考：
+
+[GHC Manual: DataKinds](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#datatype-promotion)
+
+[Giving Haskell a Promotion](http://dreixel.net/research/pdf/ghp.pdf)
+
+[Higher-order Type-level Programmingin Haskell](https://www.imperial.ac.uk/media/imperial-college/faculty-of-engineering/computing/public/1718-ug-projects/Csongor-Kiss-Higher-order-type-level-programming-in-Haskell.pdf)
+
+# TypeFamilies
 TODO
 
-## TypeFamilies
-TODO
 
 
 
-
-## 参考
+# 参考
 
 [The Future of Programming is Dependent Types — Programming Word of the Day](https://medium.com/background-thread/the-future-of-programming-is-dependent-types-programming-word-of-the-day-fcd5f2634878)
 
