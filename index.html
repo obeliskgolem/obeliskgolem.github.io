@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>OB's Blog - </title>
+        <link rel="icon" type="image/png" href="./favicon.ico">
+        <link rel="stylesheet" href="./css/syntax.css" />
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/grids-responsive-min.css">
+        <link rel="stylesheet" href="./css/blog.css">
+    </head>
+    <body>
+            <div id="layout" class="pure-g">
+                    <div class="sidebar pure-u-1 pure-u-md-1-4">
+                        <div class="header">
+                            <h1 class="brand-title">Thus Spake Obelisk</h1>
+                            <!--<h2 class="brand-tagline">Thus Spake Obelisk</h2> -->
+                
+                            <nav class="nav">
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="./">Home</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="./about.html">About</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                            <a href="./archive.html">Archive</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="./rss.xml"><img src="./rss.svg" height="16" width="16/"></a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="content pure-u-1 pure-u-md-3-4">
+                            <div>
+                                <!-- A wrapper for all the blog posts -->
+                                <div class="posts">
+                                    <article>
+                                        <section class="post">
+                                            <header class="post-title">
+                                            
+                                                
+                                            
+                                            </header>
+                                                
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Haskell.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2020-02-07-LYAH-extended-01.html">LYAH Extended (1) - GHC 类型系统扩展</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><h1 id="dependent-types">Dependent Types</h1>
+<p>GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haskell。什么是Dependent Types？简单的说就是依赖于值的类型(types depend on values)。例如<code>[a]</code>(或者说<code>List a</code>)在Haskell中是一个列表，它的类型取决于传入的类型(depend on types)而不是传入的值(depend on values)，它可以是<code>[Int]</code>，<code>[Bool]</code>等等。但当有一些额外的要求时，比如我要定义一个列表类型，这个类型的列表长度大于3(<code>List n a where n &gt; 3</code>)，一般来说Haskell是做不到这一点的。很容易想到，这种依赖于值的类型有助于编写更加健壮的程序，很多运行时的bug可以在程序的编译期规避掉，比如如果我有一个保证非零的整数类型，那我可以避免除以零的bug；如果我有非空的列表类型，那可以避免对空列表求<code>head</code>导致的Exception等。</p>
+</p>
+                    <a href="./posts/2020-02-07-LYAH-extended-01.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Haskell.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2020-01-31-LYAH-extended-00.html">LYAH Extended (0) - 引子</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><p><a href="http://learnyouahaskell.com/">Learn You A Haskell For Great Good</a> 是一本很好的Haskell语言入门书籍，但它可能也是唯一一本让我读完以后写不出一个“像样”的Haskell程序的入门书。就像前一段时间 <a href="https://www.reddit.com/r/haskell/comments/ej2g06/the_simple_haskell_initiative/">Reddit上讨论的</a>，Simple Haskell和Fancy Haskell的区别。在Reddit泡的时间越长，越发觉得除我之外的所有人都在写Fancy Haskell。</p>
+<p>我把一部分原因归于GHC的发展。作为事实上的Haskell编译器，GHC一直在不断引入新特性，使得它实际支持的语法比 <a href="https://www.haskell.org/onlinereport/haskell2010/">Haskell 2010 Report</a> 定义要大得多。翻开GHC的用户手册，第九章 <a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/lang.html">GHC Language Features</a>，里面的小节从9.1一直排到9.40，可怕。当然并不是所有的GHC扩展都同等重要，但某些语法扩展确实比其他的更重要。</p>
+<p>因此我想简单写一些关于GHC/Reddit常用或常提及，但又不在LYAH里面被包括的语法和范式，我称之为LYAH Extended。大致分为三块：一是GHC对Haskell类型系统的扩展，二是和应用范畴论相关的一些库和功能，三是Effect System。题目很大，我也知道凭目前的经验我写不好，但我还是想去做。</p>
+</p>
+                    <a href="./posts/2020-01-31-LYAH-extended-00.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Haskell.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2019-02-28-building-hakyll-site-1.html">用Hakyll搭建静态博客</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><p>去年开始对Haskell感兴趣，惭愧的是后来有段时间较忙就把它放下了，这次决定重新学习一遍。没有什么比看书+动手更好的学习方式了，用Hakyll重新搭建github pages似乎是一个很好的起点，于是就开始吧。</p>
+<p>Hakyll是一个静态的站点生成框架，written by Haskell，更多的信息可以参考 <em>Hakyll Homepage</em><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>。</p>
+</p>
+                    <a href="./posts/2019-02-28-building-hakyll-site-1.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Technology.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2018-05-09-icinga2_installation.html">Icinga2 安装手记</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><p>Icinga 2 是一个基于Nagios插件之上的一个监控框架。</p>
+</p>
+                    <a href="./posts/2018-05-09-icinga2_installation.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Haskell.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2018-04-01-learning-haskell-1.html">Haskell 自学笔记1：Functor, Applicative Functor, Monoid, Monad</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><p>光看书，这些概念实在是有点绕，借用GitHub Pages整理归纳一下。初学Haskell，还没怎么正式用过，理解上的偏差无可避免。如果有任何错误或遗漏，在后续的博客中改正。</p>
+<p>以下内容主要参考 <em>Learn you a Haskell for great good</em><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>.</p>
+</p>
+                    <a href="./posts/2018-04-01-learning-haskell-1.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+        <ol class="post_item">
+            <section>
+                <header class="post-header">
+                    
+                        <img width="48" height="48" src="./images/categories/Article.png" class="post-teaser-img" />
+                    
+                    <a class="post-title" href="./posts/2018-03-20-github-pages-initiates.html">GitHub Pages Initiates</a>
+                </header>
+
+                <div class="post-description">
+                    <p class="teaser"><p>Blogger，打开</p>
+<p>代码，插入</p>
+<p>格式，不对</p>
+<p>google，搜索</p>
+<p>文档，放弃</p>
+<p>blogger，卸载</p>
+<p>jekyll，安装</p>
+<p>主题，挑选</p>
+<p>github pages，启动</p>
+</p>
+                    <a href="./posts/2018-03-20-github-pages-initiates.html">Read more</a>
+                </div>
+            </section>
+        </ol>
+    
+
+
+<p>…or you can find more in the <a href="./archive.html">archives</a>.</p>
+                                        </section>
+                                    </article>
+                                </div>
+                            </div>
+                    </div>
+            </div>
+            <div class="footer">
+                <div class="pure-menu pure-menu-horizontal">
+                    <ul>
+                        Site proudly generated by <a href="http://jaspervdj.be/hakyll">Hakyll</a> and <a href="http://purecss.io/">Pure CSS</a>
+                    </ul>
+                </div>
+            </div>
+    </body>
+</html>

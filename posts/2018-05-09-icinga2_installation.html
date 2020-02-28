@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>OB's Blog - Icinga2 安装手记</title>
+        <link rel="icon" type="image/png" href="../favicon.ico">
+        <link rel="stylesheet" href="../css/syntax.css" />
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/grids-responsive-min.css">
+        <link rel="stylesheet" href="../css/blog.css">
+    </head>
+    <body>
+            <div id="layout" class="pure-g">
+                    <div class="sidebar pure-u-1 pure-u-md-1-4">
+                        <div class="header">
+                            <h1 class="brand-title">Thus Spake Obelisk</h1>
+                            <!--<h2 class="brand-tagline">Thus Spake Obelisk</h2> -->
+                
+                            <nav class="nav">
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../">Home</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../about.html">About</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                            <a href="../archive.html">Archive</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../rss.xml"><img src="../rss.svg" height="16" width="16/"></a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="content pure-u-1 pure-u-md-3-4">
+                            <div>
+                                <!-- A wrapper for all the blog posts -->
+                                <div class="posts">
+                                    <article>
+                                        <section class="post">
+                                            <header class="post-title">
+                                            
+                                                Icinga2 安装手记
+                                            
+                                            </header>
+                                            <article>
+    <section class="post-header">
+        
+            Posted on May  9, 2018
+        
+        
+        
+            under <a class="post-category">icinga2</a>
+        
+    </section>
+    <section>
+        <p>Icinga 2 是一个基于Nagios插件之上的一个监控框架。</p>
+<!--more-->
+<h2 id="安装指令">安装指令</h2>
+<p>For CentOS 7</p>
+<p>查看操作系统版本： <code>lsb_release -a</code></p>
+<p>安装Icinga仓库 <code>yum install epel-release</code></p>
+<p>安装Icinga2:</p>
+<pre><code># yum install icinga2
+# systemctl enable icinga2
+# systemctl start icinga2</code></pre>
+<p>安装插件 <code># yum install nagios-plugins-all</code></p>
+<h2 id="运行icinga">运行Icinga</h2>
+<p>首先需要启动，centos使用systemd管理icinga2的服务 <code># systemctl status icinga2</code></p>
+<p>通过systemd设置icinga2的自启动</p>
+<pre><code>#/etc/systemd/system/icinga2.service.d/override.conf
+
+[Service]
+Restart=always
+RestartSec=1
+StartLimitInterval=10
+StartLimitBurst=3</code></pre>
+<p>重新加载systemctl配置 <code>systemctl daemon-reload &amp;&amp; systemctl restart icinga2</code></p>
+<p>安装icinga2专用的SELinux <code>yum install icinga2-selinux</code></p>
+<p>配置语法高亮 <code>yum install vim-icinga2</code></p>
+<h2 id="安装-icinga-web-2">安装 Icinga Web 2</h2>
+<p>安装mysql</p>
+<pre><code># yum install mariadb-server mariadb
+# systemctl enable mariadb
+# systemctl start mariadb
+# mysql_secure_installation</code></pre>
+<p>安装icinga2的IDM模块（Icinga Data Output） <code># yum install icinga2-ido-mysql</code></p>
+<p>在mysql中建立用户及表</p>
+<pre><code>mysql&gt;  CREATE DATABASE icinga;
+mysql&gt;  GRANT SELECT, INSERT, UPDATE, DELETE, DROP, CREATE VIEW, INDEX, EXECUTE ON icinga.* TO 'icinga'@'localhost' IDENTIFIED BY 'icinga';
+mysql&gt; quit</code></pre>
+<p>导入数据库schema <code># mysql -u root -p icinga &lt; /usr/share/icinga2-ido-mysql/schema/mysql.sql</code></p>
+<p>启用 IDO MySQL Module并重启icinga服务 <code># icinga2 feature enable ido-mysql</code> <code># systemctl restart icinga2</code></p>
+<p>防火墙规则</p>
+<pre><code># firewall-cmd --add-service=http
+# firewall-cmd --permanent --add-service=http</code></pre>
+<p>启用Icinga的REST API <code># icinga2 api setup</code></p>
+<pre><code># vim /etc/icinga2/conf.d/api-users.conf
+
+object ApiUser &quot;icingaweb2&quot; {
+  password = &quot;Wijsn8Z9eRs5E25d&quot;
+  permissions = [ &quot;status/query&quot;, &quot;actions/*&quot;, &quot;objects/modify/*&quot;, &quot;objects/query/*&quot; ]
+}</code></pre>
+<p>安装Icinga Web2 <code>yum install icingaweb2 icingacli</code></p>
+<p>安装SELinux for Icinga Web2 <code>yum install centos-release-scl</code> <code>yum install icingaweb2-selinux</code></p>
+<p>安装Web Server</p>
+<pre><code>yum install httpd
+systemctl start httpd.service
+systemctl enable httpd.service</code></pre>
+<p>启用PHP-FPM</p>
+<pre><code>systemctl start rh-php71-php-fpm.service
+systemctl enable rh-php71-php-fpm.service</code></pre>
+<p>在<code>/etc/opt/rh/rh-php71/php.ini</code>中设置<code>date.timezone = Asia/Shanghai</code></p>
+<p>安装ImageMagick <code># yum install ImageMagick</code></p>
+<p>打开页面 http://127.0.0.1/icingaweb2/setup 完成剩下的设置</p>
+<p><strong><em>重启Icinga服务，大功告成！</em></strong></p>
+<h2 id="附从本地仓库安装icinga2">附：从本地仓库安装Icinga2</h2>
+<p>首先需要从互联网上下载所有Icinga2的包 根据<code>/etc/yum.repos.d/ICINGA-release.repo</code>定义的yum源进行下载。</p>
+<p>定义centos的源，然后用repotrack将Icinga包及其依赖的包全部抓下来。并用这些包建立一个新的yum repo。</p>
+<pre><code>repotrack -r epel-6 -r base-6 -r updates-6 -r extras-6 -r centosplus-6 -r icinga-stable-release-el6 nagios-4.3.4-7.el6.x86_64 nagios-plugins-all-2.2.1-4git.el6.x86_64 icinga2-2.8.4-1.el6.icinga.x86_64.rpm
+
+createrepo icinga-stable-release</code></pre>
+<pre><code>sftp XXX@aaa.bbb.ccc.ddd:/home/icinga2
+
+sftp&gt; mkdir icinga_repo
+sftp&gt; put -r icinga_repo</code></pre>
+<h2 id="参考文档">参考文档</h2>
+<p><a href="https://www.icinga.com/docs/icinga2/latest/doc/02-getting-started/">Icinga2 官方安装教程</a></p>
+<p><a href="https://www.icinga.com/docs/icingaweb2/latest/doc/02-Installation/">Icinga Web2 官方安装教程</a></p>
+<p><a href="https://www.icinga.com/docs/icinga2/latest/doc/13-addons/#addons">插件配置</a></p>
+    </section>
+</article>
+<div id="disqus_thread"></div>
+<script>
+
+/**
+*  RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+*  LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables*/
+
+var disqus_config = function () {
+this.page.url = "https://obeliskgolem.github.io" + '/posts/2018-05-09-icinga2_installation.html';  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = 'May  9, 2018' + 'Icinga2 安装手记'; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+s.src = 'https://ob-github-pages.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>
+    Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a>
+</noscript>
+<script id="dsq-count-scr" src="//ob-github-pages.disqus.com/count.js" async></script>
+                                        </section>
+                                    </article>
+                                </div>
+                            </div>
+                    </div>
+            </div>
+            <div class="footer">
+                <div class="pure-menu pure-menu-horizontal">
+                    <ul>
+                        Site proudly generated by <a href="http://jaspervdj.be/hakyll">Hakyll</a> and <a href="http://purecss.io/">Pure CSS</a>
+                    </ul>
+                </div>
+            </div>
+    </body>
+</html>

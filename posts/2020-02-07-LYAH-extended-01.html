@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>OB's Blog - LYAH Extended (1) - GHC 类型系统扩展</title>
+        <link rel="icon" type="image/png" href="../favicon.ico">
+        <link rel="stylesheet" href="../css/syntax.css" />
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/grids-responsive-min.css">
+        <link rel="stylesheet" href="../css/blog.css">
+    </head>
+    <body>
+            <div id="layout" class="pure-g">
+                    <div class="sidebar pure-u-1 pure-u-md-1-4">
+                        <div class="header">
+                            <h1 class="brand-title">Thus Spake Obelisk</h1>
+                            <!--<h2 class="brand-tagline">Thus Spake Obelisk</h2> -->
+                
+                            <nav class="nav">
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../">Home</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../about.html">About</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                            <a href="../archive.html">Archive</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../rss.xml"><img src="../rss.svg" height="16" width="16/"></a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="content pure-u-1 pure-u-md-3-4">
+                            <div>
+                                <!-- A wrapper for all the blog posts -->
+                                <div class="posts">
+                                    <article>
+                                        <section class="post">
+                                            <header class="post-title">
+                                            
+                                                LYAH Extended (1) - GHC 类型系统扩展
+                                            
+                                            </header>
+                                            <article>
+    <section class="post-header">
+        
+            Posted on February  7, 2020
+        
+        
+        
+            under <a class="post-category">haskell</a>
+        
+    </section>
+    <section>
+        <h1 id="dependent-types">Dependent Types</h1>
+<p>GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haskell。什么是Dependent Types？简单的说就是依赖于值的类型(types depend on values)。例如<code>[a]</code>(或者说<code>List a</code>)在Haskell中是一个列表，它的类型取决于传入的类型(depend on types)而不是传入的值(depend on values)，它可以是<code>[Int]</code>，<code>[Bool]</code>等等。但当有一些额外的要求时，比如我要定义一个列表类型，这个类型的列表长度大于3(<code>List n a where n &gt; 3</code>)，一般来说Haskell是做不到这一点的。很容易想到，这种依赖于值的类型有助于编写更加健壮的程序，很多运行时的bug可以在程序的编译期规避掉，比如如果我有一个保证非零的整数类型，那我可以避免除以零的bug；如果我有非空的列表类型，那可以避免对空列表求<code>head</code>导致的Exception等。</p>
+<!--more-->
+<p>目前为止，Haskell还没有实现完整的对Dependent Types的支持。不过GHC已经做了很多扩展使得部分需求可以实现了。来看一下这些语法扩展：</p>
+<h1 id="existentialquantification">ExistentialQuantification</h1>
+<p>Existential Quantification翻译为存在量化。这个扩展和Dependent Types没啥关系，不过可以放在一起说一下。</p>
+<p>对于类型变量，如果不做其他声明，Haskell默认有一个隐藏的全称量化(Universal Quantification)。例如</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> a</a></code></pre></div>
+<p>实际上等价于</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> <span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> a</a></code></pre></div>
+<p>也就是说，<code>a</code>是个类型变量，<code>id</code>对于作为其参数的<strong>所有类型</strong>都要能返回同样的类型。这个称为<strong>全称量化</strong>。容易想到这样的函数实际上只能写为<code>id x = x</code>。那如果想写出如下类型的函数呢？</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" title="1"><span class="ot">printSomething ::</span> a <span class="ot">-&gt;</span> <span class="dt">String</span></a></code></pre></div>
+<p>很难写出一个有实际意义的函数来(<code>const</code>这种不考虑)，因为<code>a</code>默认是全称量化的，必须要考虑到所有的可能性。但是如果加一些限制进去，例如下面</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" title="1"><span class="ot">printSomething ::</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">Show</span> a <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">String</span></a></code></pre></div>
+<p>那我们马上可以写出<code>printSomething = show</code>。这里的<code>forall a. Show a</code>就是Haskell的存在量词，表示存在一些类型<code>a</code>(是<code>Show</code>的instance)能够提供给<code>printSomething</code>。这样，<code>printSomething</code>就被<strong>存在量化</strong>了。<a href="https://prime.haskell.org/wiki/ExistentialQuantification">出于一些原因</a>，Haskell并没有采用<code>exists a.</code>作为存在量词。</p>
+<p>还有一种情况是在写类型的构造器时，存在量化允许我们在构造器中引入非参数的类型变量，也就是不出现在等号左边的变量。</p>
+<p>如下面的例子：</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" title="1"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo</span> a <span class="ot">=</span> <span class="dt">MkFoo</span> a              <span class="co">-- OK</span></a>
+<a class="sourceLine" id="cb5-2" title="2"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo1</span> <span class="ot">=</span> <span class="dt">MkFoo1</span> a              <span class="co">-- 类型变量a必须作为该类型定义的一个参数引入</span></a>
+<a class="sourceLine" id="cb5-3" title="3"><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">8</span><span class="op">:</span><span class="dv">20</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span> <span class="dt">Not</span> <span class="kw">in</span> scope<span class="op">:</span> <span class="kw">type</span> variable ‘a’ </a>
+<a class="sourceLine" id="cb5-4" title="4"></a>
+<a class="sourceLine" id="cb5-5" title="5"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="op">:</span>set <span class="op">-</span><span class="dt">XExistentialQuantification</span></a>
+<a class="sourceLine" id="cb5-6" title="6"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo2</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo2</span> a    <span class="co">-- OK</span></a></code></pre></div>
+<p>别忘了构造器实际上就是函数。因此我们有</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" title="1"><span class="dt">MkFoo2</span><span class="ot"> ::</span> <span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> <span class="dt">Foo2</span>               <span class="co">-- 存在某些a，可以用来构造Foo2</span></a></code></pre></div>
+<p>这么写，用起来就麻烦了，因为不知道<code>a</code>是什么。所以要使用存在量化一般会跟上constraints，或者利用构造器内提供的各种函数。</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb7-1" title="1"><span class="ot">fFoo2 ::</span> <span class="dt">Foo2</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb7-2" title="2">fFoo2 (<span class="dt">MkFoo2</span> x) <span class="ot">=</span> <span class="op">???</span>                          <span class="co">-- 不知道x的类型，无法使用</span></a>
+<a class="sourceLine" id="cb7-3" title="3"></a>
+<a class="sourceLine" id="cb7-4" title="4"><span class="kw">data</span> <span class="dt">Foo3</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo3</span> a (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb7-5" title="5"></a>
+<a class="sourceLine" id="cb7-6" title="6"><span class="ot">fFoo3 ::</span> <span class="dt">Foo3</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb7-7" title="7">fFoo3 (<span class="dt">MkFoo3</span> x f) <span class="ot">=</span> f x                        <span class="co">-- 通过构造器提供的函数f来使用x</span></a></code></pre></div>
+<p>如下的两种定义是等价的（当然后一种在Haskell中并不存在）：</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" title="1"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo</span> a (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb8-2" title="2"></a>
+<a class="sourceLine" id="cb8-3" title="3"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="dt">MkFoo</span> (exists a <span class="op">.</span> (a, a <span class="ot">-&gt;</span> <span class="dt">Bool</span>))</a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#existentially-quantified-data-constructors">GHC Manual: ExistentialQuantification</a></p>
+<p><a href="https://stackoverflow.com/questions/3071136/what-does-the-forall-keyword-in-haskell-ghc-do">What does the <code>forall</code> keyword in Haskell/GHC do?</a></p>
+<p><a href="https://markkarpov.com/post/existential-quantification.html">Existential quantification</a></p>
+<h1 id="rankntypes">RankNTypes</h1>
+<p><code>forall</code>关键词除了用于存在量化，还有一个常见的使用方式，就是rank-n-polymorphism，直译的话叫N阶多态。这里的多态和OOP中的多态不同，指对于函数参数类型的多态性(parametric polymorphism)。还是以<code>id</code>为例子，一般的带类型变量的多态函数我们写成</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb9-2" title="2"><span class="fu">id</span> x <span class="ot">=</span> x</a></code></pre></div>
+<p>如果要定义一个函数，让它接受某个多态函数作为输入呢？</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" title="1"><span class="ot">rank2func ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb10-2" title="2">rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a></code></pre></div>
+<p>这里并不能将<code>id</code>作为参数传入<code>rank2func</code>，虽然看起来类型是匹配的。</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb11-1" title="1">test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">16</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></a>
+<a class="sourceLine" id="cb11-2" title="2">    • <span class="dt">Couldn't</span> match expected <span class="kw">type</span> ‘<span class="dt">Int</span>’ with actual <span class="kw">type</span> ‘a’</a>
+<a class="sourceLine" id="cb11-3" title="3">      ‘a’ is a rigid <span class="kw">type</span> variable bound by</a>
+<a class="sourceLine" id="cb11-4" title="4">        the <span class="kw">type</span> signature for<span class="op">:</span></a>
+<a class="sourceLine" id="cb11-5" title="5"><span class="ot">          rank2func ::</span> <span class="kw">forall</span> a<span class="op">.</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb11-6" title="6">        at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">1</span><span class="op">:</span><span class="dv">1</span><span class="op">-</span><span class="dv">36</span></a>
+<a class="sourceLine" id="cb11-7" title="7">    • <span class="dt">In</span> the expression<span class="op">:</span> f <span class="dv">0</span></a>
+<a class="sourceLine" id="cb11-8" title="8">      <span class="dt">In</span> the expression<span class="op">:</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-9" title="9">      <span class="dt">In</span> an equation for ‘rank2func’<span class="op">:</span> rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-10" title="10">    • <span class="dt">Relevant</span> bindings include</a>
+<a class="sourceLine" id="cb11-11" title="11"><span class="ot">        f ::</span> a <span class="ot">-&gt;</span> a (bound at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">11</span>)</a>
+<a class="sourceLine" id="cb11-12" title="12"><span class="ot">        rank2func ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>) (bound at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb11-13" title="13">  <span class="op">|</span></a>
+<a class="sourceLine" id="cb11-14" title="14"><span class="dv">2</span> <span class="op">|</span> rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-15" title="15">  <span class="op">|</span>                <span class="op">^^^</span></a></code></pre></div>
+<p>为什么？还是因为Haskell有隐藏的全称量化。如果不做指定，那么类型变量<code>a</code>对于<code>rank2func</code>函数是全称量化的，并且一旦确定<code>a</code>的类型，就无法在<code>rank2func</code>函数体中更改。而逻辑上，对<code>a</code>的全称量化是传入的参数<code>f</code>应该实现的事情，作为consumer我们只考虑怎么利用<code>f</code>。这样，量化的约束就放到了<code>f</code>中，相当于<code>f</code>对<code>rank2func</code>隐藏了<code>a</code>这个类型变量，可以写成：</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb12-1" title="1"><span class="ot">rank2func' ::</span> (<span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)     <span class="co">-- 记得启用RankNTypes扩展</span></a>
+<a class="sourceLine" id="cb12-2" title="2">rank2func' f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a></code></pre></div>
+<p>最简单的量化了的函数称为一阶多态，依赖于一阶多态的函数就是二阶多态，如上的<code>rank2func'</code>。以此类推，Haskell现在可以支持任意阶多态的函数。</p>
+<p>经常用于说明<code>RankNTypes</code>的例子是<a href="https://en.wikibooks.org/wiki/Haskell/Mutable_objects#The_ST_monad">ST Monad</a>的函数<code>runST</code>。<code>ST Monad</code>是Haskell用于实现内部变量的一种Monad，<code>ST s a</code>表示在一个状态线程<code>s</code>(state thread <code>s</code>)中的一系列操作最后产生<code>a</code>类型的值。和<code>ST s a</code>一起使用的有<code>STRef s a</code>，表示在线程<code>s</code>中的，有着<code>a</code>类型的一个<strong>变量</strong>。可以看一下相关的函数</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb13-1" title="1"><span class="ot">runST ::</span> <span class="kw">forall</span> a<span class="op">.</span> (<span class="kw">forall</span> s<span class="op">.</span> <span class="dt">ST</span> s a) <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb13-2" title="2"></a>
+<a class="sourceLine" id="cb13-3" title="3"><span class="ot">newSTRef   ::</span> a <span class="ot">-&gt;</span> <span class="dt">ST</span> s (<span class="dt">STRef</span> s a)</a>
+<a class="sourceLine" id="cb13-4" title="4"><span class="ot">readSTRef  ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb13-5" title="5"><span class="ot">writeSTRef ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">ST</span> s ()</a>
+<a class="sourceLine" id="cb13-6" title="6"><span class="ot">modifySTRef ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">ST</span> s () </a></code></pre></div>
+<p>从<code>runST</code>的定义可以看出它是一个二阶多态的函数，也就是说，从<code>runST</code>来看，不用管<code>s</code>是什么(它也看不见<code>s</code>)，只负责量化<code>a</code>就可以了。<code>runST</code>保证对于所有类型的<code>a</code>，只要给它一个<code>ST s a</code>，就能生产出一个<code>a</code>。为什么要用到二阶多态？因为逻辑上，不同状态线程之间的<code>STRef</code>不能混用。如果没有rank-2-polymorphism，那么调用<code>runST</code>的时候我们可以自己指定<code>ST s1 (STRef s2 a)</code>，这是不对的。使用rank-2-polymorphism后，<code>runST</code>只负责确定<code>a</code>，不能指定<code>s1</code>或<code>s2</code>。下面的声明会报错：</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb14-1" title="1"><span class="dt">Prelude</span> <span class="dt">Control.Monad.ST</span> <span class="dt">Data.STRef</span> <span class="op">&gt;</span> v <span class="ot">=</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-2" title="2"></a>
+<a class="sourceLine" id="cb14-3" title="3"><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">13</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></a>
+<a class="sourceLine" id="cb14-4" title="4">    • <span class="dt">Couldn't</span> match <span class="kw">type</span> ‘a’ with ‘<span class="dt">STRef</span> s <span class="dt">Bool</span>’</a>
+<a class="sourceLine" id="cb14-5" title="5">        because <span class="kw">type</span> variable ‘s’ would escape its scope</a>
+<a class="sourceLine" id="cb14-6" title="6">      <span class="dt">This</span> (rigid, skolem) <span class="kw">type</span> variable is bound by</a>
+<a class="sourceLine" id="cb14-7" title="7">        a <span class="kw">type</span> expected by the context<span class="op">:</span></a>
+<a class="sourceLine" id="cb14-8" title="8">          <span class="kw">forall</span> s<span class="op">.</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb14-9" title="9">        at <span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">5</span><span class="op">-</span><span class="dv">25</span></a>
+<a class="sourceLine" id="cb14-10" title="10">      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb14-11" title="11">        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">ST</span> s (<span class="dt">STRef</span> s <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb14-12" title="12">    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">$</span>)’, namely ‘newSTRef <span class="dt">True</span>’</a>
+<a class="sourceLine" id="cb14-13" title="13">      <span class="dt">In</span> the expression<span class="op">:</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-14" title="14">      <span class="dt">In</span> an equation for ‘v’<span class="op">:</span> v <span class="ot">=</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-15" title="15">    • <span class="dt">Relevant</span> bindings include<span class="ot"> v ::</span> a (bound at <span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">1</span>)</a></code></pre></div>
+<p>虽然我们可以通过<code>newSTRef True</code>拿到一个<code>ST s (STRef s Bool)</code>，但因为括号里的<code>s</code>和前面的<code>s</code>相关，此时<code>a = STRef s Bool</code>。<code>runST</code>对<code>a</code>的全称量化<code>forall a.</code>等价于<code>forall s. STRef s Bool</code>，而根据前面说的，<code>runST</code>无法量化<code>s</code>。要正确的使用<code>runST</code>，确保它不负责指定状态线程<code>s</code>。</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb15-1" title="1"><span class="kw">import</span> <span class="dt">Control.Monad.ST</span></a>
+<a class="sourceLine" id="cb15-2" title="2"><span class="kw">import</span> <span class="dt">Data.STRef</span></a>
+<a class="sourceLine" id="cb15-3" title="3"></a>
+<a class="sourceLine" id="cb15-4" title="4">mutateVariable <span class="ot">=</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb15-5" title="5">  x <span class="ot">&lt;-</span> newSTRef (<span class="dv">0</span><span class="ot"> ::</span> <span class="dt">Int</span>)</a>
+<a class="sourceLine" id="cb15-6" title="6">  modifySTRef x (<span class="op">+</span><span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb15-7" title="7">  readSTRef x</a>
+<a class="sourceLine" id="cb15-8" title="8"></a>
+<a class="sourceLine" id="cb15-9" title="9">y <span class="ot">=</span> runST <span class="op">$</span> mutateVariable</a>
+<a class="sourceLine" id="cb15-10" title="10"></a>
+<a class="sourceLine" id="cb15-11" title="11">main <span class="ot">=</span> <span class="fu">print</span> y</a>
+<a class="sourceLine" id="cb15-12" title="12"></a>
+<a class="sourceLine" id="cb15-13" title="13"><span class="co">-- the output should be</span></a>
+<a class="sourceLine" id="cb15-14" title="14"><span class="co">-- 1</span></a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#arbitrary-rank-polymorphism">GHC Manual: Arbitrary-rank polymorphism</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Polymorphism">Wikibook: Haskell/Polymorphism</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Mutable_objects#The_ST_monad">Wikibook: Haskell/Mutable objects</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/1994/06/lazy-functional-state-threads.pdf">Lazy Functional State Thread</a></p>
+<h1 id="gadts">GADTs</h1>
+<p><strong>GADT</strong>的全称是<strong>Generalized Algebraic Data Types</strong>。Haskell构造类型的时候可以使用Sum和Product等方式，Algebraic Data Types指使用代数式的方法构造的类型(Sum，Product等名称和类型的inhabitantility有关)。</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb16-1" title="1"><span class="kw">data</span> <span class="dt">Bool</span> <span class="ot">=</span> <span class="dt">True</span> <span class="op">|</span> <span class="dt">False</span>      <span class="co">-- Sum Type</span></a>
+<a class="sourceLine" id="cb16-2" title="2"><span class="kw">data</span> <span class="dt">Pair</span> <span class="ot">=</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)       <span class="co">-- Product Type</span></a>
+<a class="sourceLine" id="cb16-3" title="3"><span class="kw">data</span> <span class="dt">AFunc</span> <span class="ot">=</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>      <span class="co">-- Func Type</span></a></code></pre></div>
+<p>构造类型的时候也可以接受类型变量作为参数，这里可以注意到构造器的返回类型总是全称量化的。</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb17-1" title="1"><span class="kw">data</span> <span class="dt">Maybe</span> a <span class="ot">=</span> <span class="dt">Nothing</span> <span class="op">|</span> <span class="dt">Just</span> a</a></code></pre></div>
+<p>如果要让构造器根据<code>a</code>的某些类型返回不同的类型呢？Haskell提供了GADT这种方式，如下看到<code>Eq</code>构造器返回的结果和作为参数的类型变量<code>a</code>已经无关了。这样做的优点在于构造器可以自由选择返回类型，并且后续做pattern matching的时候，GHC能根据构造器推导出<code>a</code>的类型。不过，返回的类型还得和声明的数据类型形式相同，不能在声明<code>A</code>类型的构造器时返回<code>B</code>类型。</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb18-1" title="1"><span class="ot">{-# LANGUAGE GADTs #-}</span></a>
+<a class="sourceLine" id="cb18-2" title="2"></a>
+<a class="sourceLine" id="cb18-3" title="3"><span class="kw">data</span> <span class="dt">Expr</span> a <span class="kw">where</span>               <span class="co">-- 构造器返回类型必须具有Expr a的形式</span></a>
+<a class="sourceLine" id="cb18-4" title="4">    <span class="dt">I</span><span class="ot">   ::</span> <span class="dt">Int</span>  <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-5" title="5">    <span class="dt">B</span><span class="ot">   ::</span> <span class="dt">Bool</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb18-6" title="6">    <span class="dt">Add</span><span class="ot"> ::</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-7" title="7">    <span class="dt">Mul</span><span class="ot"> ::</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-8" title="8">    <span class="dt">Eq</span><span class="ot">  ::</span> <span class="dt">Eq</span> a <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb18-9" title="9"></a>
+<a class="sourceLine" id="cb18-10" title="10"><span class="ot">eval ::</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb18-11" title="11">eval (<span class="dt">I</span> n) <span class="ot">=</span> n</a>
+<a class="sourceLine" id="cb18-12" title="12">eval (<span class="dt">B</span> b) <span class="ot">=</span> b</a>
+<a class="sourceLine" id="cb18-13" title="13">eval (<span class="dt">Add</span> e1 e2) <span class="ot">=</span> eval e1 <span class="op">+</span> eval e2        <span class="co">-- Add构造器只接受Expr Int</span></a>
+<a class="sourceLine" id="cb18-14" title="14">                                            <span class="co">-- GHC推导出e1, e2均为Int，允许做加法</span></a>
+<a class="sourceLine" id="cb18-15" title="15">eval (<span class="dt">Mul</span> e1 e2) <span class="ot">=</span> eval e1 <span class="op">*</span> eval e2</a>
+<a class="sourceLine" id="cb18-16" title="16">eval (<span class="dt">Eq</span>  e1 e2) <span class="ot">=</span> eval e1 <span class="op">==</span> eval e2       <span class="co">-- 同理，e1, e2类型均为Eq的instance</span></a></code></pre></div>
+<p>之前提到的存在量化，也可以用GADT实现：</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb19-1" title="1"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo</span> a</a>
+<a class="sourceLine" id="cb19-2" title="2"><span class="co">-- 等价</span></a>
+<a class="sourceLine" id="cb19-3" title="3"><span class="kw">data</span> <span class="dt">Foo</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb19-4" title="4">  <span class="dt">MkFoo</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Foo</span></a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#generalised-algebraic-data-types-gadts">GHC Manual: GADTs</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/gadt-pldi.pdf">Simple unification-based type inference for GADTs</a></p>
+<p><a href="https://andre.tips/wmh/generalized-algebraic-data-types-and-data-kinds/">Generalized Algebraic Data Types and Data Kinds</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/GADT">Wikibook: Haskell/GADT</a></p>
+<h1 id="datakinds">DataKinds</h1>
+<p>Data, Type, Kind是Haskell的三个抽象层次。在Haskell中，类型的类型被称为Kind。例如<code>Int</code>, <code>Bool</code>, <code>Int -&gt; String</code>这些类型都有着<code>*</code> Kind，接受类型变量并构造新类型的类型（例如<code>Maybe a</code>，<code>Either a b</code>）有着Kind <code>* -&gt; *</code>, <code>* -&gt; * -&gt; *</code>等。实际上，Haskell的Kind只有这几种(GHC另有一种<code>#</code> Kind用来表示unboxed types)。GHC为丰富Haskell的Kinds，提供了<code>DataKinds</code>扩展。顾名思义，<code>DataKinds</code>就是把<code>data</code>声明的类型同时也提升为Kind，通过在构造器名前加上单引号<code>'</code>，把它的构造器提升为类型构造器（之前是值构造器）。</p>
+<p>很容易想到，既然Kind是类型的类型，它最大的用处应该是检查类型构造的合法性。当我们用类型变量来构造类型的时候，可以给传入的变量一个限制，而这个限制就是Kind。例如</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb20-1" title="1"><span class="ot">{-# LANGUAGE DataKinds #-}</span></a>
+<a class="sourceLine" id="cb20-2" title="2"><span class="ot">{-# LANGUAGE KindSignatures #-}</span>       <span class="co">-- 允许使用*,#表示Kind</span></a>
+<a class="sourceLine" id="cb20-3" title="3"><span class="ot">{-# LANGUAGE GADTs #-}</span></a>
+<a class="sourceLine" id="cb20-4" title="4"></a>
+<a class="sourceLine" id="cb20-5" title="5"><span class="kw">data</span> <span class="dt">AList</span> a <span class="ot">=</span> <span class="dt">AEmpty</span> <span class="op">|</span> <span class="dt">AListCons</span> a (<span class="dt">AList</span> a)       <span class="co">-- AList has kind (* -&gt; *)</span></a>
+<a class="sourceLine" id="cb20-6" title="6"></a>
+<a class="sourceLine" id="cb20-7" title="7"><span class="kw">data</span> <span class="dt">TypeLevelList</span><span class="ot"> ::</span> <span class="dt">AList</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb20-8" title="8">  <span class="dt">EmptyList</span><span class="ot"> ::</span> <span class="dt">TypeLevelList</span> <span class="dt">'AEmpty</span>                <span class="co">-- 'AEmpty is a type now. It's type is AList a</span></a>
+<a class="sourceLine" id="cb20-9" title="9">  <span class="dt">TL</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> as <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">'AListCons</span> a as)</a>
+<a class="sourceLine" id="cb20-10" title="10">                                                    <span class="co">-- TL接受一个类型和一个类型列表，返回更长的类型列表</span></a>
+<a class="sourceLine" id="cb20-11" title="11"></a>
+<a class="sourceLine" id="cb20-12" title="12"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">AListCons</span>                         <span class="co">-- AListCons is a type (value constructor)</span></a>
+<a class="sourceLine" id="cb20-13" title="13"><span class="dt">AListCons</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a</a>
+<a class="sourceLine" id="cb20-14" title="14"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span>kind <span class="dt">'AListCons</span>                        <span class="co">-- 'AListCons is a kind (type constructor)</span></a>
+<a class="sourceLine" id="cb20-15" title="15"><span class="dt">'AListCons</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a</a>
+<a class="sourceLine" id="cb20-16" title="16"></a>
+<a class="sourceLine" id="cb20-17" title="17"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">TL</span></a>
+<a class="sourceLine" id="cb20-18" title="18"><span class="dt">TL</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> as <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">'AListCons</span> a as)</a>
+<a class="sourceLine" id="cb20-19" title="19"></a>
+<a class="sourceLine" id="cb20-20" title="20"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">EmptyList</span></a>
+<a class="sourceLine" id="cb20-21" title="21"><span class="dt">EmptyList</span><span class="ot"> ::</span> <span class="dt">TypeLevelList</span> <span class="dt">'AEmpty</span></a>
+<a class="sourceLine" id="cb20-22" title="22"></a>
+<a class="sourceLine" id="cb20-23" title="23"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> (<span class="dt">TL</span> <span class="dv">1</span> <span class="dt">EmptyList</span>)</a>
+<a class="sourceLine" id="cb20-24" title="24">(<span class="dt">TL</span> <span class="dv">1</span> <span class="dt">EmptyList</span>)<span class="ot"> ::</span> <span class="dt">Num</span> a <span class="ot">=&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">'AListCons</span> a <span class="dt">'AEmpty</span>)</a>
+<a class="sourceLine" id="cb20-25" title="25"></a>
+<a class="sourceLine" id="cb20-26" title="26"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> (<span class="dt">TL</span> <span class="dv">1</span> (<span class="dt">TL</span> <span class="dt">True</span> (<span class="dt">TL</span> <span class="st">&quot;Hello World!&quot;</span> <span class="dt">EmptyList</span>)))</a>
+<a class="sourceLine" id="cb20-27" title="27">(<span class="dt">TL</span> <span class="dv">1</span> (<span class="dt">TL</span> <span class="dt">True</span> (<span class="dt">TL</span> <span class="st">&quot;Hello World!&quot;</span> <span class="dt">EmptyList</span>)))</a>
+<a class="sourceLine" id="cb20-28" title="28"><span class="ot">  ::</span> <span class="dt">Num</span> a <span class="ot">=&gt;</span></a>
+<a class="sourceLine" id="cb20-29" title="29">     <span class="dt">TypeLevelList</span></a>
+<a class="sourceLine" id="cb20-30" title="30">       (<span class="dt">'AListCons</span> a (<span class="dt">'AListCons</span> <span class="dt">Bool</span> (<span class="dt">'AListCons</span> [<span class="dt">Char</span>] <span class="dt">'AEmpty</span>)))</a>
+<a class="sourceLine" id="cb20-31" title="31"></a></code></pre></div>
+<p>事实上Haskell已经提供了type level list的包：<a href="https://hackage.haskell.org/package/HList">HList</a>。</p>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#datatype-promotion">GHC Manual: DataKinds</a></p>
+<p><a href="http://dreixel.net/research/pdf/ghp.pdf">Giving Haskell a Promotion</a></p>
+<p><a href="https://www.imperial.ac.uk/media/imperial-college/faculty-of-engineering/computing/public/1718-ug-projects/Csongor-Kiss-Higher-order-type-level-programming-in-Haskell.pdf">Higher-order Type-level Programmingin Haskell</a></p>
+<h1 id="typefamilies">TypeFamilies</h1>
+<p>Type Family是一种介于具体的类型（如<code>Int</code>，<code>Bool</code>）和多态类型（如<code>Maybe a</code>）之间的类型集合，允许有限程度的多态。<code>TypeFamilies</code>扩展一般指对两种语法的支持：</p>
+<ol type="1">
+<li><code>data family</code>：定义一组数据类型的集合</li>
+<li><code>type family</code>：定义类型同义词(type synonym)的集合，可以理解为<strong><em>类型化简</em></strong></li>
+</ol>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb21-1" title="1"><span class="ot">{-# LANGUAGE TypeFamilies #-}</span></a>
+<a class="sourceLine" id="cb21-2" title="2"><span class="ot">{-# LANGUAGE KindSignatures #-}</span></a>
+<a class="sourceLine" id="cb21-3" title="3"></a>
+<a class="sourceLine" id="cb21-4" title="4"><span class="kw">import</span> <span class="dt">Data.IntMap</span></a>
+<a class="sourceLine" id="cb21-5" title="5"></a>
+<a class="sourceLine" id="cb21-6" title="6"><span class="kw">data</span> <span class="kw">family</span> <span class="dt">PairData</span><span class="ot"> a ::</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span>    <span class="co">-- PairData a是一个data family，表示一组(* -&gt; *)的类型</span></a>
+<a class="sourceLine" id="cb21-7" title="7"></a>
+<a class="sourceLine" id="cb21-8" title="8"><span class="kw">data</span> <span class="kw">instance</span> <span class="dt">PairData</span> <span class="dt">Int</span>  b <span class="ot">=</span> <span class="dt">PairInt</span> (<span class="dt">IntMap</span> b)</a>
+<a class="sourceLine" id="cb21-9" title="9">                                    <span class="co">-- a为Int时对应PairInt构造器，接受一个IntMap</span></a>
+<a class="sourceLine" id="cb21-10" title="10"><span class="kw">data</span> <span class="kw">instance</span> <span class="dt">PairData</span> <span class="dt">Bool</span> b <span class="ot">=</span> <span class="dt">PairBool</span> b</a>
+<a class="sourceLine" id="cb21-11" title="11">                                    <span class="co">-- a为Bool时对应PairBool构造器</span></a>
+<a class="sourceLine" id="cb21-12" title="12"></a>
+<a class="sourceLine" id="cb21-13" title="13"><span class="kw">type</span> <span class="kw">family</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb21-14" title="14"><span class="kw">type</span> <span class="kw">instance</span> <span class="dt">Elem</span> [e] <span class="ot">=</span> e</a></code></pre></div>
+<p>注意<code>data family</code>需要在typeclass中使用，不能直接用于普通函数。</p>
+<p><em>Even if data families are defined as toplevel declarations, functions that perform different computations for different family instances may still need to be defined as methods of type classes.</em></p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb22-1" title="1"><span class="kw">class</span> <span class="dt">UsePairData</span> a <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-2" title="2"><span class="ot">  usePairData ::</span> <span class="dt">PairData</span> a b <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> b</a>
+<a class="sourceLine" id="cb22-3" title="3"></a>
+<a class="sourceLine" id="cb22-4" title="4"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Int</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-5" title="5">  usePairData (<span class="dt">PairInt</span> m) key <span class="ot">=</span> Data.IntMap.lookup key m</a>
+<a class="sourceLine" id="cb22-6" title="6"></a>
+<a class="sourceLine" id="cb22-7" title="7"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Bool</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-8" title="8">  usePairData (<span class="dt">PairBool</span> t) cond <span class="ot">=</span> <span class="kw">if</span> <span class="fu">fst</span> t <span class="kw">then</span> <span class="dt">Just</span> (<span class="fu">snd</span> t) <span class="kw">else</span> <span class="dt">Nothing</span></a></code></pre></div>
+<p>也可以在typeclass中定义<code>data family</code>和<code>type family</code>，此时<code>family</code>和<code>instance</code>可省略。另外，在typeclass中的<code>data family</code>和<code>type family</code>只能使用typeclass定义时声明的类型变量。例如</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb23-1" title="1"><span class="kw">class</span> <span class="dt">UsePairData</span> a <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-2" title="2">  <span class="kw">data</span> <span class="dt">PairData</span><span class="ot"> a ::</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span></a>
+<a class="sourceLine" id="cb23-3" title="3">  <span class="co">-- data WrongPairData a b :: * -&gt; * </span></a>
+<a class="sourceLine" id="cb23-4" title="4">  <span class="co">-- won't type check since b is unknown to the type class</span></a>
+<a class="sourceLine" id="cb23-5" title="5"><span class="ot">  usePairData ::</span> <span class="dt">PairData</span> a b <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> b</a>
+<a class="sourceLine" id="cb23-6" title="6"></a>
+<a class="sourceLine" id="cb23-7" title="7"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Int</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-8" title="8">  <span class="kw">data</span> <span class="dt">PairData</span> <span class="dt">Int</span>  b <span class="ot">=</span> <span class="dt">PairInt</span> (<span class="dt">IntMap</span> b)</a>
+<a class="sourceLine" id="cb23-9" title="9">  usePairData (<span class="dt">PairInt</span> m) key <span class="ot">=</span> Data.IntMap.lookup key m</a>
+<a class="sourceLine" id="cb23-10" title="10"></a>
+<a class="sourceLine" id="cb23-11" title="11"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Bool</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-12" title="12">  <span class="kw">data</span> <span class="dt">PairData</span> <span class="dt">Bool</span>  b <span class="ot">=</span> <span class="dt">PairBool</span> b</a>
+<a class="sourceLine" id="cb23-13" title="13">  usePairData (<span class="dt">PairBool</span> b) cond <span class="ot">=</span> <span class="kw">if</span> cond <span class="kw">then</span> <span class="dt">Just</span> b <span class="kw">else</span> <span class="dt">Nothing</span></a>
+<a class="sourceLine" id="cb23-14" title="14"></a>
+<a class="sourceLine" id="cb23-15" title="15"><span class="kw">class</span> <span class="dt">UseElem</span> c <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-16" title="16">  <span class="kw">type</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb23-17" title="17"><span class="ot">  listHead ::</span> c <span class="ot">-&gt;</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb23-18" title="18"></a>
+<a class="sourceLine" id="cb23-19" title="19"><span class="kw">instance</span> <span class="dt">UseElem</span> [c] <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-20" title="20">  <span class="kw">type</span> <span class="dt">Elem</span> [c] <span class="ot">=</span> c</a>
+<a class="sourceLine" id="cb23-21" title="21">  listHead <span class="ot">=</span> <span class="fu">head</span></a></code></pre></div>
+<p><em>上面的例子举得有点简单，但我一时半会写不出原创的复杂的例子……</em></p>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#type-families">GHC Manual: TypeFamilies</a></p>
+<p><a href="https://wiki.haskell.org/GHC/Type_families">GHC/Type families</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2008/01/icfp2008.pdf">Type Checking with Open Type Functions</a></p>
+<p><a href="http://dev.stephendiehl.com/hask/#type-families">Type Families</a></p>
+<h1 id="其他参考">其他参考</h1>
+<p><a href="https://medium.com/background-thread/the-future-of-programming-is-dependent-types-programming-word-of-the-day-fcd5f2634878">The Future of Programming is Dependent Types — Programming Word of the Day</a></p>
+<p><a href="https://en.wikipedia.org/wiki/Dependent_type">Wiki: Dependent type</a></p>
+<p><a href="https://plato.stanford.edu/entries/type-theory-intuitionistic/">Intuitionistic Type Theory</a></p>
+<p><a href="https://wiki.haskell.org/Research_papers/Type_systems">Research papers/Type systems</a></p>
+<p><a href="https://www.schoolofhaskell.com/user/konn/prove-your-haskell-for-great-safety/dependent-types-in-haskell">Dependent Types in Haskell</a></p>
+<blockquote>
+<p>This post is highly inspired by Ollie Charles’s <em>24 Days of GHC Extensions</em> series. See also:</p>
+<p><a href="https://ocharles.org.uk/guest-posts/2014-12-19-existential-quantification.html">24 Days of GHC Extensions: Existential Quantification</a></p>
+<p><a href="https://ocharles.org.uk/guest-posts/2014-12-18-rank-n-types.html">24 Days of GHC Extensions: Rank N Types</a></p>
+<p><a href="https://ocharles.org.uk/posts/2014-12-12-type-families.html">24 Days of GHC Extensions: Type Families</a></p>
+</blockquote>
+    </section>
+</article>
+<div id="disqus_thread"></div>
+<script>
+
+/**
+*  RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+*  LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables*/
+
+var disqus_config = function () {
+this.page.url = "https://obeliskgolem.github.io" + '/posts/2020-02-07-LYAH-extended-01.html';  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = 'February  7, 2020' + 'LYAH Extended (1) - GHC 类型系统扩展'; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+s.src = 'https://ob-github-pages.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>
+    Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a>
+</noscript>
+<script id="dsq-count-scr" src="//ob-github-pages.disqus.com/count.js" async></script>
+                                        </section>
+                                    </article>
+                                </div>
+                            </div>
+                    </div>
+            </div>
+            <div class="footer">
+                <div class="pure-menu pure-menu-horizontal">
+                    <ul>
+                        Site proudly generated by <a href="http://jaspervdj.be/hakyll">Hakyll</a> and <a href="http://purecss.io/">Pure CSS</a>
+                    </ul>
+                </div>
+            </div>
+    </body>
+</html>

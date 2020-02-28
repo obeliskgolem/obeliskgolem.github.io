@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>OB's Blog - LYAH Extended (0) - 引子</title>
+        <link rel="icon" type="image/png" href="../favicon.ico">
+        <link rel="stylesheet" href="../css/syntax.css" />
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/grids-responsive-min.css">
+        <link rel="stylesheet" href="../css/blog.css">
+    </head>
+    <body>
+            <div id="layout" class="pure-g">
+                    <div class="sidebar pure-u-1 pure-u-md-1-4">
+                        <div class="header">
+                            <h1 class="brand-title">Thus Spake Obelisk</h1>
+                            <!--<h2 class="brand-tagline">Thus Spake Obelisk</h2> -->
+                
+                            <nav class="nav">
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../">Home</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../about.html">About</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                            <a href="../archive.html">Archive</a>
+                                    </li>
+                                </ul>
+                                <ul class="nav-list">
+                                    <li class="nav-item">
+                                        <a href="../rss.xml"><img src="../rss.svg" height="16" width="16/"></a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="content pure-u-1 pure-u-md-3-4">
+                            <div>
+                                <!-- A wrapper for all the blog posts -->
+                                <div class="posts">
+                                    <article>
+                                        <section class="post">
+                                            <header class="post-title">
+                                            
+                                                LYAH Extended (0) - 引子
+                                            
+                                            </header>
+                                            <article>
+    <section class="post-header">
+        
+            Posted on January 31, 2020
+        
+        
+        
+            under <a class="post-category">haskell</a>
+        
+    </section>
+    <section>
+        <p><a href="http://learnyouahaskell.com/">Learn You A Haskell For Great Good</a> 是一本很好的Haskell语言入门书籍，但它可能也是唯一一本让我读完以后写不出一个“像样”的Haskell程序的入门书。就像前一段时间 <a href="https://www.reddit.com/r/haskell/comments/ej2g06/the_simple_haskell_initiative/">Reddit上讨论的</a>，Simple Haskell和Fancy Haskell的区别。在Reddit泡的时间越长，越发觉得除我之外的所有人都在写Fancy Haskell。</p>
+<p>我把一部分原因归于GHC的发展。作为事实上的Haskell编译器，GHC一直在不断引入新特性，使得它实际支持的语法比 <a href="https://www.haskell.org/onlinereport/haskell2010/">Haskell 2010 Report</a> 定义要大得多。翻开GHC的用户手册，第九章 <a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/lang.html">GHC Language Features</a>，里面的小节从9.1一直排到9.40，可怕。当然并不是所有的GHC扩展都同等重要，但某些语法扩展确实比其他的更重要。</p>
+<p>因此我想简单写一些关于GHC/Reddit常用或常提及，但又不在LYAH里面被包括的语法和范式，我称之为LYAH Extended。大致分为三块：一是GHC对Haskell类型系统的扩展，二是和应用范畴论相关的一些库和功能，三是Effect System。题目很大，我也知道凭目前的经验我写不好，但我还是想去做。</p>
+<!--more-->
+    </section>
+</article>
+<div id="disqus_thread"></div>
+<script>
+
+/**
+*  RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+*  LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables*/
+
+var disqus_config = function () {
+this.page.url = "https://obeliskgolem.github.io" + '/posts/2020-01-31-LYAH-extended-00.html';  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = 'January 31, 2020' + 'LYAH Extended (0) - 引子'; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+s.src = 'https://ob-github-pages.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>
+    Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a>
+</noscript>
+<script id="dsq-count-scr" src="//ob-github-pages.disqus.com/count.js" async></script>
+                                        </section>
+                                    </article>
+                                </div>
+                            </div>
+                    </div>
+            </div>
+            <div class="footer">
+                <div class="pure-menu pure-menu-horizontal">
+                    <ul>
+                        Site proudly generated by <a href="http://jaspervdj.be/hakyll">Hakyll</a> and <a href="http://purecss.io/">Pure CSS</a>
+                    </ul>
+                </div>
+            </div>
+    </body>
+</html>

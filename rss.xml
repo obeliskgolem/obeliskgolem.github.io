@@ -1,0 +1,680 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>OB's Blog - All posts</title>
+        <link>https://obeliskgolem.github.io</link>
+        <description><![CDATA[THUS SPAKE OBELISK]]></description>
+        <atom:link href="https://obeliskgolem.github.io/rss.xml" rel="self"
+                   type="application/rss+xml" />
+        <lastBuildDate>Fri, 07 Feb 2020 00:00:00 UT</lastBuildDate>
+        <item>
+    <title>LYAH Extended (1) - GHC 类型系统扩展</title>
+    <link>https://obeliskgolem.github.io/posts/2020-02-07-LYAH-extended-01.html</link>
+    <description><![CDATA[<h1 id="dependent-types">Dependent Types</h1>
+<p>GHC近几年的一个发展趋势是试图将Dependent Types的概念引入Haskell。什么是Dependent Types？简单的说就是依赖于值的类型(types depend on values)。例如<code>[a]</code>(或者说<code>List a</code>)在Haskell中是一个列表，它的类型取决于传入的类型(depend on types)而不是传入的值(depend on values)，它可以是<code>[Int]</code>，<code>[Bool]</code>等等。但当有一些额外的要求时，比如我要定义一个列表类型，这个类型的列表长度大于3(<code>List n a where n &gt; 3</code>)，一般来说Haskell是做不到这一点的。很容易想到，这种依赖于值的类型有助于编写更加健壮的程序，很多运行时的bug可以在程序的编译期规避掉，比如如果我有一个保证非零的整数类型，那我可以避免除以零的bug；如果我有非空的列表类型，那可以避免对空列表求<code>head</code>导致的Exception等。</p>
+<!--more-->
+<p>目前为止，Haskell还没有实现完整的对Dependent Types的支持。不过GHC已经做了很多扩展使得部分需求可以实现了。来看一下这些语法扩展：</p>
+<h1 id="existentialquantification">ExistentialQuantification</h1>
+<p>Existential Quantification翻译为存在量化。这个扩展和Dependent Types没啥关系，不过可以放在一起说一下。</p>
+<p>对于类型变量，如果不做其他声明，Haskell默认有一个隐藏的全称量化(Universal Quantification)。例如</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> a</a></code></pre></div>
+<p>实际上等价于</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> <span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> a</a></code></pre></div>
+<p>也就是说，<code>a</code>是个类型变量，<code>id</code>对于作为其参数的<strong>所有类型</strong>都要能返回同样的类型。这个称为<strong>全称量化</strong>。容易想到这样的函数实际上只能写为<code>id x = x</code>。那如果想写出如下类型的函数呢？</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" title="1"><span class="ot">printSomething ::</span> a <span class="ot">-&gt;</span> <span class="dt">String</span></a></code></pre></div>
+<p>很难写出一个有实际意义的函数来(<code>const</code>这种不考虑)，因为<code>a</code>默认是全称量化的，必须要考虑到所有的可能性。但是如果加一些限制进去，例如下面</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" title="1"><span class="ot">printSomething ::</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">Show</span> a <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">String</span></a></code></pre></div>
+<p>那我们马上可以写出<code>printSomething = show</code>。这里的<code>forall a. Show a</code>就是Haskell的存在量词，表示存在一些类型<code>a</code>(是<code>Show</code>的instance)能够提供给<code>printSomething</code>。这样，<code>printSomething</code>就被<strong>存在量化</strong>了。<a href="https://prime.haskell.org/wiki/ExistentialQuantification">出于一些原因</a>，Haskell并没有采用<code>exists a.</code>作为存在量词。</p>
+<p>还有一种情况是在写类型的构造器时，存在量化允许我们在构造器中引入非参数的类型变量，也就是不出现在等号左边的变量。</p>
+<p>如下面的例子：</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" title="1"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo</span> a <span class="ot">=</span> <span class="dt">MkFoo</span> a              <span class="co">-- OK</span></a>
+<a class="sourceLine" id="cb5-2" title="2"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo1</span> <span class="ot">=</span> <span class="dt">MkFoo1</span> a              <span class="co">-- 类型变量a必须作为该类型定义的一个参数引入</span></a>
+<a class="sourceLine" id="cb5-3" title="3"><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">8</span><span class="op">:</span><span class="dv">20</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span> <span class="dt">Not</span> <span class="kw">in</span> scope<span class="op">:</span> <span class="kw">type</span> variable ‘a’ </a>
+<a class="sourceLine" id="cb5-4" title="4"></a>
+<a class="sourceLine" id="cb5-5" title="5"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="op">:</span>set <span class="op">-</span><span class="dt">XExistentialQuantification</span></a>
+<a class="sourceLine" id="cb5-6" title="6"><span class="dt">Prelude</span> <span class="op">&gt;</span> <span class="kw">data</span> <span class="dt">Foo2</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo2</span> a    <span class="co">-- OK</span></a></code></pre></div>
+<p>别忘了构造器实际上就是函数。因此我们有</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" title="1"><span class="dt">MkFoo2</span><span class="ot"> ::</span> <span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> <span class="dt">Foo2</span>               <span class="co">-- 存在某些a，可以用来构造Foo2</span></a></code></pre></div>
+<p>这么写，用起来就麻烦了，因为不知道<code>a</code>是什么。所以要使用存在量化一般会跟上constraints，或者利用构造器内提供的各种函数。</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb7-1" title="1"><span class="ot">fFoo2 ::</span> <span class="dt">Foo2</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb7-2" title="2">fFoo2 (<span class="dt">MkFoo2</span> x) <span class="ot">=</span> <span class="op">???</span>                          <span class="co">-- 不知道x的类型，无法使用</span></a>
+<a class="sourceLine" id="cb7-3" title="3"></a>
+<a class="sourceLine" id="cb7-4" title="4"><span class="kw">data</span> <span class="dt">Foo3</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo3</span> a (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb7-5" title="5"></a>
+<a class="sourceLine" id="cb7-6" title="6"><span class="ot">fFoo3 ::</span> <span class="dt">Foo3</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb7-7" title="7">fFoo3 (<span class="dt">MkFoo3</span> x f) <span class="ot">=</span> f x                        <span class="co">-- 通过构造器提供的函数f来使用x</span></a></code></pre></div>
+<p>如下的两种定义是等价的（当然后一种在Haskell中并不存在）：</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" title="1"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo</span> a (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb8-2" title="2"></a>
+<a class="sourceLine" id="cb8-3" title="3"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="dt">MkFoo</span> (exists a <span class="op">.</span> (a, a <span class="ot">-&gt;</span> <span class="dt">Bool</span>))</a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#existentially-quantified-data-constructors">GHC Manual: ExistentialQuantification</a></p>
+<p><a href="https://stackoverflow.com/questions/3071136/what-does-the-forall-keyword-in-haskell-ghc-do">What does the <code>forall</code> keyword in Haskell/GHC do?</a></p>
+<p><a href="https://markkarpov.com/post/existential-quantification.html">Existential quantification</a></p>
+<h1 id="rankntypes">RankNTypes</h1>
+<p><code>forall</code>关键词除了用于存在量化，还有一个常见的使用方式，就是rank-n-polymorphism，直译的话叫N阶多态。这里的多态和OOP中的多态不同，指对于函数参数类型的多态性(parametric polymorphism)。还是以<code>id</code>为例子，一般的带类型变量的多态函数我们写成</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" title="1"><span class="fu">id</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb9-2" title="2"><span class="fu">id</span> x <span class="ot">=</span> x</a></code></pre></div>
+<p>如果要定义一个函数，让它接受某个多态函数作为输入呢？</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" title="1"><span class="ot">rank2func ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb10-2" title="2">rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a></code></pre></div>
+<p>这里并不能将<code>id</code>作为参数传入<code>rank2func</code>，虽然看起来类型是匹配的。</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb11-1" title="1">test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">16</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></a>
+<a class="sourceLine" id="cb11-2" title="2">    • <span class="dt">Couldn&#39;t</span> match expected <span class="kw">type</span> ‘<span class="dt">Int</span>’ with actual <span class="kw">type</span> ‘a’</a>
+<a class="sourceLine" id="cb11-3" title="3">      ‘a’ is a rigid <span class="kw">type</span> variable bound by</a>
+<a class="sourceLine" id="cb11-4" title="4">        the <span class="kw">type</span> signature for<span class="op">:</span></a>
+<a class="sourceLine" id="cb11-5" title="5"><span class="ot">          rank2func ::</span> <span class="kw">forall</span> a<span class="op">.</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb11-6" title="6">        at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">1</span><span class="op">:</span><span class="dv">1</span><span class="op">-</span><span class="dv">36</span></a>
+<a class="sourceLine" id="cb11-7" title="7">    • <span class="dt">In</span> the expression<span class="op">:</span> f <span class="dv">0</span></a>
+<a class="sourceLine" id="cb11-8" title="8">      <span class="dt">In</span> the expression<span class="op">:</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-9" title="9">      <span class="dt">In</span> an equation for ‘rank2func’<span class="op">:</span> rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-10" title="10">    • <span class="dt">Relevant</span> bindings include</a>
+<a class="sourceLine" id="cb11-11" title="11"><span class="ot">        f ::</span> a <span class="ot">-&gt;</span> a (bound at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">11</span>)</a>
+<a class="sourceLine" id="cb11-12" title="12"><span class="ot">        rank2func ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>) (bound at test<span class="op">.</span>hs<span class="op">:</span><span class="dv">2</span><span class="op">:</span><span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb11-13" title="13">  <span class="op">|</span></a>
+<a class="sourceLine" id="cb11-14" title="14"><span class="dv">2</span> <span class="op">|</span> rank2func f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a>
+<a class="sourceLine" id="cb11-15" title="15">  <span class="op">|</span>                <span class="op">^^^</span></a></code></pre></div>
+<p>为什么？还是因为Haskell有隐藏的全称量化。如果不做指定，那么类型变量<code>a</code>对于<code>rank2func</code>函数是全称量化的，并且一旦确定<code>a</code>的类型，就无法在<code>rank2func</code>函数体中更改。而逻辑上，对<code>a</code>的全称量化是传入的参数<code>f</code>应该实现的事情，作为consumer我们只考虑怎么利用<code>f</code>。这样，量化的约束就放到了<code>f</code>中，相当于<code>f</code>对<code>rank2func</code>隐藏了<code>a</code>这个类型变量，可以写成：</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb12-1" title="1"><span class="ot">rank2func&#39; ::</span> (<span class="kw">forall</span> a<span class="op">.</span> a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)     <span class="co">-- 记得启用RankNTypes扩展</span></a>
+<a class="sourceLine" id="cb12-2" title="2">rank2func&#39; f <span class="ot">=</span> (f <span class="dv">0</span>, f <span class="dt">True</span>)</a></code></pre></div>
+<p>最简单的量化了的函数称为一阶多态，依赖于一阶多态的函数就是二阶多态，如上的<code>rank2func'</code>。以此类推，Haskell现在可以支持任意阶多态的函数。</p>
+<p>经常用于说明<code>RankNTypes</code>的例子是<a href="https://en.wikibooks.org/wiki/Haskell/Mutable_objects#The_ST_monad">ST Monad</a>的函数<code>runST</code>。<code>ST Monad</code>是Haskell用于实现内部变量的一种Monad，<code>ST s a</code>表示在一个状态线程<code>s</code>(state thread <code>s</code>)中的一系列操作最后产生<code>a</code>类型的值。和<code>ST s a</code>一起使用的有<code>STRef s a</code>，表示在线程<code>s</code>中的，有着<code>a</code>类型的一个<strong>变量</strong>。可以看一下相关的函数</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb13-1" title="1"><span class="ot">runST ::</span> <span class="kw">forall</span> a<span class="op">.</span> (<span class="kw">forall</span> s<span class="op">.</span> <span class="dt">ST</span> s a) <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb13-2" title="2"></a>
+<a class="sourceLine" id="cb13-3" title="3"><span class="ot">newSTRef   ::</span> a <span class="ot">-&gt;</span> <span class="dt">ST</span> s (<span class="dt">STRef</span> s a)</a>
+<a class="sourceLine" id="cb13-4" title="4"><span class="ot">readSTRef  ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb13-5" title="5"><span class="ot">writeSTRef ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">ST</span> s ()</a>
+<a class="sourceLine" id="cb13-6" title="6"><span class="ot">modifySTRef ::</span> <span class="dt">STRef</span> s a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">ST</span> s () </a></code></pre></div>
+<p>从<code>runST</code>的定义可以看出它是一个二阶多态的函数，也就是说，从<code>runST</code>来看，不用管<code>s</code>是什么(它也看不见<code>s</code>)，只负责量化<code>a</code>就可以了。<code>runST</code>保证对于所有类型的<code>a</code>，只要给它一个<code>ST s a</code>，就能生产出一个<code>a</code>。为什么要用到二阶多态？因为逻辑上，不同状态线程之间的<code>STRef</code>不能混用。如果没有rank-2-polymorphism，那么调用<code>runST</code>的时候我们可以自己指定<code>ST s1 (STRef s2 a)</code>，这是不对的。使用rank-2-polymorphism后，<code>runST</code>只负责确定<code>a</code>，不能指定<code>s1</code>或<code>s2</code>。下面的声明会报错：</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb14-1" title="1"><span class="dt">Prelude</span> <span class="dt">Control.Monad.ST</span> <span class="dt">Data.STRef</span> <span class="op">&gt;</span> v <span class="ot">=</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-2" title="2"></a>
+<a class="sourceLine" id="cb14-3" title="3"><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">13</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></a>
+<a class="sourceLine" id="cb14-4" title="4">    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘a’ with ‘<span class="dt">STRef</span> s <span class="dt">Bool</span>’</a>
+<a class="sourceLine" id="cb14-5" title="5">        because <span class="kw">type</span> variable ‘s’ would escape its scope</a>
+<a class="sourceLine" id="cb14-6" title="6">      <span class="dt">This</span> (rigid, skolem) <span class="kw">type</span> variable is bound by</a>
+<a class="sourceLine" id="cb14-7" title="7">        a <span class="kw">type</span> expected by the context<span class="op">:</span></a>
+<a class="sourceLine" id="cb14-8" title="8">          <span class="kw">forall</span> s<span class="op">.</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb14-9" title="9">        at <span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">5</span><span class="op">-</span><span class="dv">25</span></a>
+<a class="sourceLine" id="cb14-10" title="10">      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">ST</span> s a</a>
+<a class="sourceLine" id="cb14-11" title="11">        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">ST</span> s (<span class="dt">STRef</span> s <span class="dt">Bool</span>)</a>
+<a class="sourceLine" id="cb14-12" title="12">    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">$</span>)’, namely ‘newSTRef <span class="dt">True</span>’</a>
+<a class="sourceLine" id="cb14-13" title="13">      <span class="dt">In</span> the expression<span class="op">:</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-14" title="14">      <span class="dt">In</span> an equation for ‘v’<span class="op">:</span> v <span class="ot">=</span> runST <span class="op">$</span> newSTRef <span class="dt">True</span></a>
+<a class="sourceLine" id="cb14-15" title="15">    • <span class="dt">Relevant</span> bindings include<span class="ot"> v ::</span> a (bound at <span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">7</span><span class="op">:</span><span class="dv">1</span>)</a></code></pre></div>
+<p>虽然我们可以通过<code>newSTRef True</code>拿到一个<code>ST s (STRef s Bool)</code>，但因为括号里的<code>s</code>和前面的<code>s</code>相关，此时<code>a = STRef s Bool</code>。<code>runST</code>对<code>a</code>的全称量化<code>forall a.</code>等价于<code>forall s. STRef s Bool</code>，而根据前面说的，<code>runST</code>无法量化<code>s</code>。要正确的使用<code>runST</code>，确保它不负责指定状态线程<code>s</code>。</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb15-1" title="1"><span class="kw">import</span> <span class="dt">Control.Monad.ST</span></a>
+<a class="sourceLine" id="cb15-2" title="2"><span class="kw">import</span> <span class="dt">Data.STRef</span></a>
+<a class="sourceLine" id="cb15-3" title="3"></a>
+<a class="sourceLine" id="cb15-4" title="4">mutateVariable <span class="ot">=</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb15-5" title="5">  x <span class="ot">&lt;-</span> newSTRef (<span class="dv">0</span><span class="ot"> ::</span> <span class="dt">Int</span>)</a>
+<a class="sourceLine" id="cb15-6" title="6">  modifySTRef x (<span class="op">+</span><span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb15-7" title="7">  readSTRef x</a>
+<a class="sourceLine" id="cb15-8" title="8"></a>
+<a class="sourceLine" id="cb15-9" title="9">y <span class="ot">=</span> runST <span class="op">$</span> mutateVariable</a>
+<a class="sourceLine" id="cb15-10" title="10"></a>
+<a class="sourceLine" id="cb15-11" title="11">main <span class="ot">=</span> <span class="fu">print</span> y</a>
+<a class="sourceLine" id="cb15-12" title="12"></a>
+<a class="sourceLine" id="cb15-13" title="13"><span class="co">-- the output should be</span></a>
+<a class="sourceLine" id="cb15-14" title="14"><span class="co">-- 1</span></a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#arbitrary-rank-polymorphism">GHC Manual: Arbitrary-rank polymorphism</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Polymorphism">Wikibook: Haskell/Polymorphism</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Mutable_objects#The_ST_monad">Wikibook: Haskell/Mutable objects</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/1994/06/lazy-functional-state-threads.pdf">Lazy Functional State Thread</a></p>
+<h1 id="gadts">GADTs</h1>
+<p><strong>GADT</strong>的全称是<strong>Generalized Algebraic Data Types</strong>。Haskell构造类型的时候可以使用Sum和Product等方式，Algebraic Data Types指使用代数式的方法构造的类型(Sum，Product等名称和类型的inhabitantility有关)。</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb16-1" title="1"><span class="kw">data</span> <span class="dt">Bool</span> <span class="ot">=</span> <span class="dt">True</span> <span class="op">|</span> <span class="dt">False</span>      <span class="co">-- Sum Type</span></a>
+<a class="sourceLine" id="cb16-2" title="2"><span class="kw">data</span> <span class="dt">Pair</span> <span class="ot">=</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>)       <span class="co">-- Product Type</span></a>
+<a class="sourceLine" id="cb16-3" title="3"><span class="kw">data</span> <span class="dt">AFunc</span> <span class="ot">=</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>      <span class="co">-- Func Type</span></a></code></pre></div>
+<p>构造类型的时候也可以接受类型变量作为参数，这里可以注意到构造器的返回类型总是全称量化的。</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb17-1" title="1"><span class="kw">data</span> <span class="dt">Maybe</span> a <span class="ot">=</span> <span class="dt">Nothing</span> <span class="op">|</span> <span class="dt">Just</span> a</a></code></pre></div>
+<p>如果要让构造器根据<code>a</code>的某些类型返回不同的类型呢？Haskell提供了GADT这种方式，如下看到<code>Eq</code>构造器返回的结果和作为参数的类型变量<code>a</code>已经无关了。这样做的优点在于构造器可以自由选择返回类型，并且后续做pattern matching的时候，GHC能根据构造器推导出<code>a</code>的类型。不过，返回的类型还得和声明的数据类型形式相同，不能在声明<code>A</code>类型的构造器时返回<code>B</code>类型。</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb18-1" title="1"><span class="ot">{-# LANGUAGE GADTs #-}</span></a>
+<a class="sourceLine" id="cb18-2" title="2"></a>
+<a class="sourceLine" id="cb18-3" title="3"><span class="kw">data</span> <span class="dt">Expr</span> a <span class="kw">where</span>               <span class="co">-- 构造器返回类型必须具有Expr a的形式</span></a>
+<a class="sourceLine" id="cb18-4" title="4">    <span class="dt">I</span><span class="ot">   ::</span> <span class="dt">Int</span>  <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-5" title="5">    <span class="dt">B</span><span class="ot">   ::</span> <span class="dt">Bool</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb18-6" title="6">    <span class="dt">Add</span><span class="ot"> ::</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-7" title="7">    <span class="dt">Mul</span><span class="ot"> ::</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb18-8" title="8">    <span class="dt">Eq</span><span class="ot">  ::</span> <span class="dt">Eq</span> a <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> <span class="dt">Bool</span></a>
+<a class="sourceLine" id="cb18-9" title="9"></a>
+<a class="sourceLine" id="cb18-10" title="10"><span class="ot">eval ::</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb18-11" title="11">eval (<span class="dt">I</span> n) <span class="ot">=</span> n</a>
+<a class="sourceLine" id="cb18-12" title="12">eval (<span class="dt">B</span> b) <span class="ot">=</span> b</a>
+<a class="sourceLine" id="cb18-13" title="13">eval (<span class="dt">Add</span> e1 e2) <span class="ot">=</span> eval e1 <span class="op">+</span> eval e2        <span class="co">-- Add构造器只接受Expr Int</span></a>
+<a class="sourceLine" id="cb18-14" title="14">                                            <span class="co">-- GHC推导出e1, e2均为Int，允许做加法</span></a>
+<a class="sourceLine" id="cb18-15" title="15">eval (<span class="dt">Mul</span> e1 e2) <span class="ot">=</span> eval e1 <span class="op">*</span> eval e2</a>
+<a class="sourceLine" id="cb18-16" title="16">eval (<span class="dt">Eq</span>  e1 e2) <span class="ot">=</span> eval e1 <span class="op">==</span> eval e2       <span class="co">-- 同理，e1, e2类型均为Eq的instance</span></a></code></pre></div>
+<p>之前提到的存在量化，也可以用GADT实现：</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb19-1" title="1"><span class="kw">data</span> <span class="dt">Foo</span> <span class="ot">=</span> <span class="kw">forall</span> a<span class="op">.</span> <span class="dt">MkFoo</span> a</a>
+<a class="sourceLine" id="cb19-2" title="2"><span class="co">-- 等价</span></a>
+<a class="sourceLine" id="cb19-3" title="3"><span class="kw">data</span> <span class="dt">Foo</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb19-4" title="4">  <span class="dt">MkFoo</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Foo</span></a></code></pre></div>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#generalised-algebraic-data-types-gadts">GHC Manual: GADTs</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/gadt-pldi.pdf">Simple unification-based type inference for GADTs</a></p>
+<p><a href="https://andre.tips/wmh/generalized-algebraic-data-types-and-data-kinds/">Generalized Algebraic Data Types and Data Kinds</a></p>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/GADT">Wikibook: Haskell/GADT</a></p>
+<h1 id="datakinds">DataKinds</h1>
+<p>Data, Type, Kind是Haskell的三个抽象层次。在Haskell中，类型的类型被称为Kind。例如<code>Int</code>, <code>Bool</code>, <code>Int -&gt; String</code>这些类型都有着<code>*</code> Kind，接受类型变量并构造新类型的类型（例如<code>Maybe a</code>，<code>Either a b</code>）有着Kind <code>* -&gt; *</code>, <code>* -&gt; * -&gt; *</code>等。实际上，Haskell的Kind只有这几种(GHC另有一种<code>#</code> Kind用来表示unboxed types)。GHC为丰富Haskell的Kinds，提供了<code>DataKinds</code>扩展。顾名思义，<code>DataKinds</code>就是把<code>data</code>声明的类型同时也提升为Kind，通过在构造器名前加上单引号<code>'</code>，把它的构造器提升为类型构造器（之前是值构造器）。</p>
+<p>很容易想到，既然Kind是类型的类型，它最大的用处应该是检查类型构造的合法性。当我们用类型变量来构造类型的时候，可以给传入的变量一个限制，而这个限制就是Kind。例如</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb20-1" title="1"><span class="ot">{-# LANGUAGE DataKinds #-}</span></a>
+<a class="sourceLine" id="cb20-2" title="2"><span class="ot">{-# LANGUAGE KindSignatures #-}</span>       <span class="co">-- 允许使用*,#表示Kind</span></a>
+<a class="sourceLine" id="cb20-3" title="3"><span class="ot">{-# LANGUAGE GADTs #-}</span></a>
+<a class="sourceLine" id="cb20-4" title="4"></a>
+<a class="sourceLine" id="cb20-5" title="5"><span class="kw">data</span> <span class="dt">AList</span> a <span class="ot">=</span> <span class="dt">AEmpty</span> <span class="op">|</span> <span class="dt">AListCons</span> a (<span class="dt">AList</span> a)       <span class="co">-- AList has kind (* -&gt; *)</span></a>
+<a class="sourceLine" id="cb20-6" title="6"></a>
+<a class="sourceLine" id="cb20-7" title="7"><span class="kw">data</span> <span class="dt">TypeLevelList</span><span class="ot"> ::</span> <span class="dt">AList</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb20-8" title="8">  <span class="dt">EmptyList</span><span class="ot"> ::</span> <span class="dt">TypeLevelList</span> <span class="dt">&#39;AEmpty</span>                <span class="co">-- &#39;AEmpty is a type now. It&#39;s type is AList a</span></a>
+<a class="sourceLine" id="cb20-9" title="9">  <span class="dt">TL</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> as <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">&#39;AListCons</span> a as)</a>
+<a class="sourceLine" id="cb20-10" title="10">                                                    <span class="co">-- TL接受一个类型和一个类型列表，返回更长的类型列表</span></a>
+<a class="sourceLine" id="cb20-11" title="11"></a>
+<a class="sourceLine" id="cb20-12" title="12"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">AListCons</span>                         <span class="co">-- AListCons is a type (value constructor)</span></a>
+<a class="sourceLine" id="cb20-13" title="13"><span class="dt">AListCons</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a</a>
+<a class="sourceLine" id="cb20-14" title="14"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span>kind <span class="dt">&#39;AListCons</span>                        <span class="co">-- &#39;AListCons is a kind (type constructor)</span></a>
+<a class="sourceLine" id="cb20-15" title="15"><span class="dt">&#39;AListCons</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a <span class="ot">-&gt;</span> <span class="dt">AList</span> a</a>
+<a class="sourceLine" id="cb20-16" title="16"></a>
+<a class="sourceLine" id="cb20-17" title="17"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">TL</span></a>
+<a class="sourceLine" id="cb20-18" title="18"><span class="dt">TL</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> as <span class="ot">-&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">&#39;AListCons</span> a as)</a>
+<a class="sourceLine" id="cb20-19" title="19"></a>
+<a class="sourceLine" id="cb20-20" title="20"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> <span class="dt">EmptyList</span></a>
+<a class="sourceLine" id="cb20-21" title="21"><span class="dt">EmptyList</span><span class="ot"> ::</span> <span class="dt">TypeLevelList</span> <span class="dt">&#39;AEmpty</span></a>
+<a class="sourceLine" id="cb20-22" title="22"></a>
+<a class="sourceLine" id="cb20-23" title="23"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> (<span class="dt">TL</span> <span class="dv">1</span> <span class="dt">EmptyList</span>)</a>
+<a class="sourceLine" id="cb20-24" title="24">(<span class="dt">TL</span> <span class="dv">1</span> <span class="dt">EmptyList</span>)<span class="ot"> ::</span> <span class="dt">Num</span> a <span class="ot">=&gt;</span> <span class="dt">TypeLevelList</span> (<span class="dt">&#39;AListCons</span> a <span class="dt">&#39;AEmpty</span>)</a>
+<a class="sourceLine" id="cb20-25" title="25"></a>
+<a class="sourceLine" id="cb20-26" title="26"><span class="op">*</span><span class="dt">Main</span> <span class="op">&gt;</span> <span class="op">:</span><span class="kw">type</span> (<span class="dt">TL</span> <span class="dv">1</span> (<span class="dt">TL</span> <span class="dt">True</span> (<span class="dt">TL</span> <span class="st">&quot;Hello World!&quot;</span> <span class="dt">EmptyList</span>)))</a>
+<a class="sourceLine" id="cb20-27" title="27">(<span class="dt">TL</span> <span class="dv">1</span> (<span class="dt">TL</span> <span class="dt">True</span> (<span class="dt">TL</span> <span class="st">&quot;Hello World!&quot;</span> <span class="dt">EmptyList</span>)))</a>
+<a class="sourceLine" id="cb20-28" title="28"><span class="ot">  ::</span> <span class="dt">Num</span> a <span class="ot">=&gt;</span></a>
+<a class="sourceLine" id="cb20-29" title="29">     <span class="dt">TypeLevelList</span></a>
+<a class="sourceLine" id="cb20-30" title="30">       (<span class="dt">&#39;AListCons</span> a (<span class="dt">&#39;AListCons</span> <span class="dt">Bool</span> (<span class="dt">&#39;AListCons</span> [<span class="dt">Char</span>] <span class="dt">&#39;AEmpty</span>)))</a>
+<a class="sourceLine" id="cb20-31" title="31"></a></code></pre></div>
+<p>事实上Haskell已经提供了type level list的包：<a href="https://hackage.haskell.org/package/HList">HList</a>。</p>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#datatype-promotion">GHC Manual: DataKinds</a></p>
+<p><a href="http://dreixel.net/research/pdf/ghp.pdf">Giving Haskell a Promotion</a></p>
+<p><a href="https://www.imperial.ac.uk/media/imperial-college/faculty-of-engineering/computing/public/1718-ug-projects/Csongor-Kiss-Higher-order-type-level-programming-in-Haskell.pdf">Higher-order Type-level Programmingin Haskell</a></p>
+<h1 id="typefamilies">TypeFamilies</h1>
+<p>Type Family是一种介于具体的类型（如<code>Int</code>，<code>Bool</code>）和多态类型（如<code>Maybe a</code>）之间的类型集合，允许有限程度的多态。<code>TypeFamilies</code>扩展一般指对两种语法的支持：</p>
+<ol type="1">
+<li><code>data family</code>：定义一组数据类型的集合</li>
+<li><code>type family</code>：定义类型同义词(type synonym)的集合，可以理解为<strong><em>类型化简</em></strong></li>
+</ol>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb21-1" title="1"><span class="ot">{-# LANGUAGE TypeFamilies #-}</span></a>
+<a class="sourceLine" id="cb21-2" title="2"><span class="ot">{-# LANGUAGE KindSignatures #-}</span></a>
+<a class="sourceLine" id="cb21-3" title="3"></a>
+<a class="sourceLine" id="cb21-4" title="4"><span class="kw">import</span> <span class="dt">Data.IntMap</span></a>
+<a class="sourceLine" id="cb21-5" title="5"></a>
+<a class="sourceLine" id="cb21-6" title="6"><span class="kw">data</span> <span class="kw">family</span> <span class="dt">PairData</span><span class="ot"> a ::</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span>    <span class="co">-- PairData a是一个data family，表示一组(* -&gt; *)的类型</span></a>
+<a class="sourceLine" id="cb21-7" title="7"></a>
+<a class="sourceLine" id="cb21-8" title="8"><span class="kw">data</span> <span class="kw">instance</span> <span class="dt">PairData</span> <span class="dt">Int</span>  b <span class="ot">=</span> <span class="dt">PairInt</span> (<span class="dt">IntMap</span> b)</a>
+<a class="sourceLine" id="cb21-9" title="9">                                    <span class="co">-- a为Int时对应PairInt构造器，接受一个IntMap</span></a>
+<a class="sourceLine" id="cb21-10" title="10"><span class="kw">data</span> <span class="kw">instance</span> <span class="dt">PairData</span> <span class="dt">Bool</span> b <span class="ot">=</span> <span class="dt">PairBool</span> b</a>
+<a class="sourceLine" id="cb21-11" title="11">                                    <span class="co">-- a为Bool时对应PairBool构造器</span></a>
+<a class="sourceLine" id="cb21-12" title="12"></a>
+<a class="sourceLine" id="cb21-13" title="13"><span class="kw">type</span> <span class="kw">family</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb21-14" title="14"><span class="kw">type</span> <span class="kw">instance</span> <span class="dt">Elem</span> [e] <span class="ot">=</span> e</a></code></pre></div>
+<p>注意<code>data family</code>需要在typeclass中使用，不能直接用于普通函数。</p>
+<p><em>Even if data families are defined as toplevel declarations, functions that perform different computations for different family instances may still need to be defined as methods of type classes.</em></p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb22-1" title="1"><span class="kw">class</span> <span class="dt">UsePairData</span> a <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-2" title="2"><span class="ot">  usePairData ::</span> <span class="dt">PairData</span> a b <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> b</a>
+<a class="sourceLine" id="cb22-3" title="3"></a>
+<a class="sourceLine" id="cb22-4" title="4"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Int</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-5" title="5">  usePairData (<span class="dt">PairInt</span> m) key <span class="ot">=</span> Data.IntMap.lookup key m</a>
+<a class="sourceLine" id="cb22-6" title="6"></a>
+<a class="sourceLine" id="cb22-7" title="7"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Bool</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb22-8" title="8">  usePairData (<span class="dt">PairBool</span> t) cond <span class="ot">=</span> <span class="kw">if</span> <span class="fu">fst</span> t <span class="kw">then</span> <span class="dt">Just</span> (<span class="fu">snd</span> t) <span class="kw">else</span> <span class="dt">Nothing</span></a></code></pre></div>
+<p>也可以在typeclass中定义<code>data family</code>和<code>type family</code>，此时<code>family</code>和<code>instance</code>可省略。另外，在typeclass中的<code>data family</code>和<code>type family</code>只能使用typeclass定义时声明的类型变量。例如</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb23-1" title="1"><span class="kw">class</span> <span class="dt">UsePairData</span> a <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-2" title="2">  <span class="kw">data</span> <span class="dt">PairData</span><span class="ot"> a ::</span> <span class="op">*</span> <span class="ot">-&gt;</span> <span class="op">*</span></a>
+<a class="sourceLine" id="cb23-3" title="3">  <span class="co">-- data WrongPairData a b :: * -&gt; * </span></a>
+<a class="sourceLine" id="cb23-4" title="4">  <span class="co">-- won&#39;t type check since b is unknown to the type class</span></a>
+<a class="sourceLine" id="cb23-5" title="5"><span class="ot">  usePairData ::</span> <span class="dt">PairData</span> a b <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> b</a>
+<a class="sourceLine" id="cb23-6" title="6"></a>
+<a class="sourceLine" id="cb23-7" title="7"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Int</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-8" title="8">  <span class="kw">data</span> <span class="dt">PairData</span> <span class="dt">Int</span>  b <span class="ot">=</span> <span class="dt">PairInt</span> (<span class="dt">IntMap</span> b)</a>
+<a class="sourceLine" id="cb23-9" title="9">  usePairData (<span class="dt">PairInt</span> m) key <span class="ot">=</span> Data.IntMap.lookup key m</a>
+<a class="sourceLine" id="cb23-10" title="10"></a>
+<a class="sourceLine" id="cb23-11" title="11"><span class="kw">instance</span> <span class="dt">UsePairData</span> <span class="dt">Bool</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-12" title="12">  <span class="kw">data</span> <span class="dt">PairData</span> <span class="dt">Bool</span>  b <span class="ot">=</span> <span class="dt">PairBool</span> b</a>
+<a class="sourceLine" id="cb23-13" title="13">  usePairData (<span class="dt">PairBool</span> b) cond <span class="ot">=</span> <span class="kw">if</span> cond <span class="kw">then</span> <span class="dt">Just</span> b <span class="kw">else</span> <span class="dt">Nothing</span></a>
+<a class="sourceLine" id="cb23-14" title="14"></a>
+<a class="sourceLine" id="cb23-15" title="15"><span class="kw">class</span> <span class="dt">UseElem</span> c <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-16" title="16">  <span class="kw">type</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb23-17" title="17"><span class="ot">  listHead ::</span> c <span class="ot">-&gt;</span> <span class="dt">Elem</span> c</a>
+<a class="sourceLine" id="cb23-18" title="18"></a>
+<a class="sourceLine" id="cb23-19" title="19"><span class="kw">instance</span> <span class="dt">UseElem</span> [c] <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-20" title="20">  <span class="kw">type</span> <span class="dt">Elem</span> [c] <span class="ot">=</span> c</a>
+<a class="sourceLine" id="cb23-21" title="21">  listHead <span class="ot">=</span> <span class="fu">head</span></a></code></pre></div>
+<p><em>上面的例子举得有点简单，但我一时半会写不出原创的复杂的例子……</em></p>
+<p>可以参考：</p>
+<p><a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#type-families">GHC Manual: TypeFamilies</a></p>
+<p><a href="https://wiki.haskell.org/GHC/Type_families">GHC/Type families</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2008/01/icfp2008.pdf">Type Checking with Open Type Functions</a></p>
+<p><a href="http://dev.stephendiehl.com/hask/#type-families">Type Families</a></p>
+<h1 id="其他参考">其他参考</h1>
+<p><a href="https://medium.com/background-thread/the-future-of-programming-is-dependent-types-programming-word-of-the-day-fcd5f2634878">The Future of Programming is Dependent Types — Programming Word of the Day</a></p>
+<p><a href="https://en.wikipedia.org/wiki/Dependent_type">Wiki: Dependent type</a></p>
+<p><a href="https://plato.stanford.edu/entries/type-theory-intuitionistic/">Intuitionistic Type Theory</a></p>
+<p><a href="https://wiki.haskell.org/Research_papers/Type_systems">Research papers/Type systems</a></p>
+<p><a href="https://www.schoolofhaskell.com/user/konn/prove-your-haskell-for-great-safety/dependent-types-in-haskell">Dependent Types in Haskell</a></p>
+<blockquote>
+<p>This post is highly inspired by Ollie Charles’s <em>24 Days of GHC Extensions</em> series. See also:</p>
+<p><a href="https://ocharles.org.uk/guest-posts/2014-12-19-existential-quantification.html">24 Days of GHC Extensions: Existential Quantification</a></p>
+<p><a href="https://ocharles.org.uk/guest-posts/2014-12-18-rank-n-types.html">24 Days of GHC Extensions: Rank N Types</a></p>
+<p><a href="https://ocharles.org.uk/posts/2014-12-12-type-families.html">24 Days of GHC Extensions: Type Families</a></p>
+</blockquote>]]></description>
+    <pubDate>Fri, 07 Feb 2020 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2020-02-07-LYAH-extended-01.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+<item>
+    <title>LYAH Extended (0) - 引子</title>
+    <link>https://obeliskgolem.github.io/posts/2020-01-31-LYAH-extended-00.html</link>
+    <description><![CDATA[<p><a href="http://learnyouahaskell.com/">Learn You A Haskell For Great Good</a> 是一本很好的Haskell语言入门书籍，但它可能也是唯一一本让我读完以后写不出一个“像样”的Haskell程序的入门书。就像前一段时间 <a href="https://www.reddit.com/r/haskell/comments/ej2g06/the_simple_haskell_initiative/">Reddit上讨论的</a>，Simple Haskell和Fancy Haskell的区别。在Reddit泡的时间越长，越发觉得除我之外的所有人都在写Fancy Haskell。</p>
+<p>我把一部分原因归于GHC的发展。作为事实上的Haskell编译器，GHC一直在不断引入新特性，使得它实际支持的语法比 <a href="https://www.haskell.org/onlinereport/haskell2010/">Haskell 2010 Report</a> 定义要大得多。翻开GHC的用户手册，第九章 <a href="https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/lang.html">GHC Language Features</a>，里面的小节从9.1一直排到9.40，可怕。当然并不是所有的GHC扩展都同等重要，但某些语法扩展确实比其他的更重要。</p>
+<p>因此我想简单写一些关于GHC/Reddit常用或常提及，但又不在LYAH里面被包括的语法和范式，我称之为LYAH Extended。大致分为三块：一是GHC对Haskell类型系统的扩展，二是和应用范畴论相关的一些库和功能，三是Effect System。题目很大，我也知道凭目前的经验我写不好，但我还是想去做。</p>
+<!--more-->]]></description>
+    <pubDate>Fri, 31 Jan 2020 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2020-01-31-LYAH-extended-00.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+<item>
+    <title>用Hakyll搭建静态博客</title>
+    <link>https://obeliskgolem.github.io/posts/2019-02-28-building-hakyll-site-1.html</link>
+    <description><![CDATA[<p>去年开始对Haskell感兴趣，惭愧的是后来有段时间较忙就把它放下了，这次决定重新学习一遍。没有什么比看书+动手更好的学习方式了，用Hakyll重新搭建github pages似乎是一个很好的起点，于是就开始吧。</p>
+<p>Hakyll是一个静态的站点生成框架，written by Haskell，更多的信息可以参考 <em>Hakyll Homepage</em><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>。</p>
+<!--more-->
+<h2 id="ghccabal环境搭建">GHC/Cabal环境搭建</h2>
+<p>要使用Hakyll，首先必须在本机上配置好Haskell的编译环境。感谢万能的github，我找到了ghcup工具。比起Haskell官网的Haskell Platform来说，ghcup提供了更为简单明了的配置方式。（<a href="https://mail.haskell.org/pipermail/haskell-community/2015-September/000014.html">Haskell Platform as the default recommendation considered harmful</a>）。</p>
+<p>按ghcup的说明文档，首先通过脚本下载及编译ghc/cabal：</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb1-1" title="1"><span class="co"># complete bootstrap</span></a>
+<a class="sourceLine" id="cb1-2" title="2"><span class="ex">curl</span> https://raw.githubusercontent.com/haskell/ghcup/master/bootstrap-haskell -sSf <span class="kw">|</span> <span class="fu">sh</span></a></code></pre></div>
+<p>编译完成后，别忘了设置环境变量：</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb2-1" title="1"><span class="co"># prepare your environment</span></a>
+<a class="sourceLine" id="cb2-2" title="2"><span class="bu">.</span> <span class="st">&quot;</span><span class="va">$HOME</span><span class="st">/.ghcup/env&quot;</span></a>
+<a class="sourceLine" id="cb2-3" title="3"><span class="bu">echo</span> <span class="st">&#39;. $HOME/.ghcup/env&#39;</span> <span class="op">&gt;&gt;</span> <span class="st">&quot;</span><span class="va">$HOME</span><span class="st">/.bashrc&quot;</span> <span class="co"># or similar</span></a></code></pre></div>
+<p>设置好环境变量后就可以使用ghc/cabal了，我安装的版本是ghc 8.6.3/cabal 2.4.1。</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb3-1" title="1"><span class="ex">~/Blogs/blog/posts</span><span class="va">$ghc</span> <span class="ex">--version</span></a>
+<a class="sourceLine" id="cb3-2" title="2"><span class="ex">The</span> Glorious Glasgow Haskell Compilation System, version 8.6.3</a>
+<a class="sourceLine" id="cb3-3" title="3"></a>
+<a class="sourceLine" id="cb3-4" title="4"><span class="ex">~/Blogs/blog/posts</span><span class="va">$cabal</span> <span class="ex">--version</span></a>
+<a class="sourceLine" id="cb3-5" title="5"><span class="ex">cabal-install</span> version 2.4.1.0</a>
+<a class="sourceLine" id="cb3-6" title="6"><span class="ex">compiled</span> using version 2.4.1.0 of the Cabal library</a></code></pre></div>
+<p>配置中途出过一个问题，cabal编译所需要的内存太多。按<a href="https://stackoverflow.com/a/28207691">stackoverflow上的方法</a>，添加了一些swap space后解决。</p>
+<h2 id="安装及配置hakyll">安装及配置Hakyll</h2>
+<p>Hakyll的安装可以参考<a href="https://jaspervdj.be/hakyll/tutorials.html">官网的教程</a>，很简单：</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb4-1" title="1">$ <span class="ex">cabal</span> install hakyll</a></code></pre></div>
+<p>之后用<code>hakyll-init $sitedir</code>就建好了一个简单的站点目录。</p>
+<h2 id="一些自定义配置">一些自定义配置</h2>
+<h3 id="站点主题">站点主题</h3>
+<p>我从 <em>Hakyll CSS Garden</em><a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a> 中找了一个<a href="http://katychuang.com/hakyll-cssgarden/gallery/theme/2015-07-15-bronx.html">bronx主题</a>，修改后替换了<code>$sitedir/css</code>目录下的<code>default.css</code>。不过这个主题挺简陋的，有空的话想把它美化一下。</p>
+<h3 id="代码语法高亮">代码语法高亮</h3>
+<p>博客中会出现一些代码，需要额外的css文件处理代码的语法高亮。以下是我参考<a href="https://github.com/jaspervdj">jaspervdj</a>（Hakyll作者）<a href="https://github.com/jaspervdj/hakyll/blob/master/web/css/syntax.css">修改</a>和<a href="https://gist.github.com/mike-ward/df355b23f4ee6c8cff05118c907c2cbf">pandoc default syntax style</a>自己改的<code>syntax.css</code>。</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode css"><code class="sourceCode css"><a class="sourceLine" id="cb5-1" title="1">div<span class="fu">.sourceCode</span> { <span class="kw">overflow-x</span>: <span class="bu">auto</span><span class="op">;</span> }</a>
+<a class="sourceLine" id="cb5-2" title="2">table<span class="fu">.sourceCode</span><span class="op">,</span> tr<span class="fu">.sourceCode</span><span class="op">,</span> td<span class="fu">.lineNumbers</span><span class="op">,</span> td<span class="fu">.sourceCode</span> {</a>
+<a class="sourceLine" id="cb5-3" title="3">  <span class="kw">margin</span>: <span class="dv">0</span><span class="op">;</span> <span class="kw">padding</span>: <span class="dv">0</span><span class="op">;</span> <span class="kw">vertical-align</span>: <span class="dv">baseline</span><span class="op">;</span> <span class="kw">border</span>: <span class="dv">none</span><span class="op">;</span> }</a>
+<a class="sourceLine" id="cb5-4" title="4">table<span class="fu">.sourceCode</span> { <span class="kw">width</span>: <span class="dv">100</span><span class="dt">%</span><span class="op">;</span> <span class="kw">line-height</span>: <span class="dv">100</span><span class="dt">%</span><span class="op">;</span> }</a>
+<a class="sourceLine" id="cb5-5" title="5">td<span class="fu">.lineNumbers</span> { <span class="kw">text-align</span>: <span class="dv">right</span><span class="op">;</span> <span class="kw">padding-right</span>: <span class="dv">4</span><span class="dt">px</span><span class="op">;</span> <span class="kw">padding-left</span>: <span class="dv">4</span><span class="dt">px</span><span class="op">;</span> <span class="kw">color</span>: <span class="cn">#aaaaaa</span><span class="op">;</span> <span class="kw">border-right</span>: <span class="dv">1</span><span class="dt">px</span> <span class="dv">solid</span> <span class="cn">#aaaaaa</span><span class="op">;</span> }</a>
+<a class="sourceLine" id="cb5-6" title="6">td<span class="fu">.sourceCode</span> { <span class="kw">padding-left</span>: <span class="dv">5</span><span class="dt">px</span><span class="op">;</span> }</a>
+<a class="sourceLine" id="cb5-7" title="7"></a>
+<a class="sourceLine" id="cb5-8" title="8">pre code {</a>
+<a class="sourceLine" id="cb5-9" title="9"><span class="kw">display</span>: <span class="dv">block</span><span class="op">;</span></a>
+<a class="sourceLine" id="cb5-10" title="10"><span class="kw">background-color</span>: <span class="fu">rgb(</span><span class="dv">250</span><span class="op">,</span><span class="dv">250</span><span class="op">,</span><span class="dv">250</span><span class="fu">)</span><span class="op">;</span></a>
+<a class="sourceLine" id="cb5-11" title="11"><span class="kw">padding-left</span>: <span class="dv">4</span><span class="dt">px</span><span class="op">;</span></a>
+<a class="sourceLine" id="cb5-12" title="12"><span class="kw">padding-right</span>: <span class="dv">4</span><span class="dt">px</span><span class="op">;</span></a>
+<a class="sourceLine" id="cb5-13" title="13">}</a>
+<a class="sourceLine" id="cb5-14" title="14"></a>
+<a class="sourceLine" id="cb5-15" title="15">code {</a>
+<a class="sourceLine" id="cb5-16" title="16"><span class="kw">border</span>: <span class="dv">1</span><span class="dt">px</span> <span class="dv">solid</span> <span class="fu">rgb(</span><span class="dv">200</span><span class="op">,</span><span class="dv">200</span><span class="op">,</span><span class="dv">200</span><span class="fu">)</span><span class="op">;</span></a>
+<a class="sourceLine" id="cb5-17" title="17">}</a>
+<a class="sourceLine" id="cb5-18" title="18"></a>
+<a class="sourceLine" id="cb5-19" title="19"><span class="fu">.sourceCode</span> span<span class="fu">.kw</span> { <span class="kw">color</span>: <span class="cn">#007020</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> } <span class="co">/* Keyword */</span></a>
+<a class="sourceLine" id="cb5-20" title="20"><span class="fu">.sourceCode</span> span<span class="fu">.dt</span> { <span class="kw">color</span>: <span class="cn">#902000</span><span class="op">;</span> } <span class="co">/* DataType */</span></a>
+<a class="sourceLine" id="cb5-21" title="21"><span class="fu">.sourceCode</span> span<span class="fu">.dv</span> { <span class="kw">color</span>: <span class="cn">#40a070</span><span class="op">;</span> } <span class="co">/* DecVal */</span></a>
+<a class="sourceLine" id="cb5-22" title="22"><span class="fu">.sourceCode</span> span<span class="fu">.bn</span> { <span class="kw">color</span>: <span class="cn">#40a070</span><span class="op">;</span> } <span class="co">/* BaseN */</span></a>
+<a class="sourceLine" id="cb5-23" title="23"><span class="fu">.sourceCode</span> span<span class="fu">.fl</span> { <span class="kw">color</span>: <span class="cn">#40a070</span><span class="op">;</span> } <span class="co">/* Float */</span></a>
+<a class="sourceLine" id="cb5-24" title="24"><span class="fu">.sourceCode</span> span<span class="fu">.ch</span> { <span class="kw">color</span>: <span class="cn">#4070a0</span><span class="op">;</span> } <span class="co">/* Char */</span></a>
+<a class="sourceLine" id="cb5-25" title="25"><span class="fu">.sourceCode</span> span<span class="fu">.st</span> { <span class="kw">color</span>: <span class="cn">#4070a0</span><span class="op">;</span> } <span class="co">/* String */</span></a>
+<a class="sourceLine" id="cb5-26" title="26"><span class="fu">.sourceCode</span> span<span class="fu">.co</span> { <span class="kw">color</span>: <span class="cn">#60a0b0</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* Comment */</span></a>
+<a class="sourceLine" id="cb5-27" title="27"><span class="fu">.sourceCode</span> span<span class="fu">.ot</span> { <span class="kw">color</span>: <span class="cn">#007020</span><span class="op">;</span> } <span class="co">/* Other */</span></a>
+<a class="sourceLine" id="cb5-28" title="28"><span class="fu">.sourceCode</span> span<span class="fu">.al</span> { <span class="kw">color</span>: <span class="cn">#ff0000</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> } <span class="co">/* Alert */</span></a>
+<a class="sourceLine" id="cb5-29" title="29"><span class="fu">.sourceCode</span> span<span class="fu">.fu</span> { <span class="kw">color</span>: <span class="cn">#06287e</span><span class="op">;</span> } <span class="co">/* Function */</span></a>
+<a class="sourceLine" id="cb5-30" title="30"><span class="fu">.sourceCode</span> span<span class="fu">.er</span> { <span class="kw">color</span>: <span class="cn">#ff0000</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> } <span class="co">/* Error */</span></a>
+<a class="sourceLine" id="cb5-31" title="31"><span class="fu">.sourceCode</span> span<span class="fu">.wa</span> { <span class="kw">color</span>: <span class="cn">#60a0b0</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* Warning */</span><span class="fu">.sourceCode</span> span<span class="fu">.cn</span> { <span class="kw">color</span>: <span class="cn">#880000</span><span class="op">;</span> } <span class="co">/* Constant */</span></a>
+<a class="sourceLine" id="cb5-32" title="32"><span class="fu">.sourceCode</span> span<span class="fu">.sc</span> { <span class="kw">color</span>: <span class="cn">#4070a0</span><span class="op">;</span> } <span class="co">/* SpecialChar */</span></a>
+<a class="sourceLine" id="cb5-33" title="33"><span class="fu">.sourceCode</span> span<span class="fu">.vs</span> { <span class="kw">color</span>: <span class="cn">#4070a0</span><span class="op">;</span> } <span class="co">/* VerbatimString */</span></a>
+<a class="sourceLine" id="cb5-34" title="34"><span class="fu">.sourceCode</span> span<span class="fu">.ss</span> { <span class="kw">color</span>: <span class="cn">#bb6688</span><span class="op">;</span> } <span class="co">/* SpecialString */</span></a>
+<a class="sourceLine" id="cb5-35" title="35"><span class="fu">.sourceCode</span> span<span class="fu">.im</span> { } <span class="co">/* Import */</span></a>
+<a class="sourceLine" id="cb5-36" title="36"><span class="fu">.sourceCode</span> span<span class="fu">.va</span> { <span class="kw">color</span>: <span class="cn">#19177c</span><span class="op">;</span> } <span class="co">/* Variable */</span></a>
+<a class="sourceLine" id="cb5-37" title="37"><span class="fu">.sourceCode</span> span<span class="fu">.cf</span> { <span class="kw">color</span>: <span class="cn">#007020</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> } <span class="co">/* ControlFlow */</span></a>
+<a class="sourceLine" id="cb5-38" title="38"><span class="fu">.sourceCode</span> span<span class="fu">.op</span> { <span class="kw">color</span>: <span class="cn">#666666</span><span class="op">;</span> } <span class="co">/* Operator */</span></a>
+<a class="sourceLine" id="cb5-39" title="39"><span class="fu">.sourceCode</span> span<span class="fu">.bu</span> { } <span class="co">/* BuiltIn */</span></a>
+<a class="sourceLine" id="cb5-40" title="40"><span class="fu">.sourceCode</span> span<span class="fu">.ex</span> { } <span class="co">/* Extension */</span></a>
+<a class="sourceLine" id="cb5-41" title="41"><span class="fu">.sourceCode</span> span<span class="fu">.pp</span> { <span class="kw">color</span>: <span class="cn">#bc7a00</span><span class="op">;</span> } <span class="co">/* Preprocessor */</span></a>
+<a class="sourceLine" id="cb5-42" title="42"><span class="fu">.sourceCode</span> span<span class="fu">.at</span> { <span class="kw">color</span>: <span class="cn">#7d9029</span><span class="op">;</span> } <span class="co">/* Attribute */</span></a>
+<a class="sourceLine" id="cb5-43" title="43"><span class="fu">.sourceCode</span> span<span class="fu">.do</span> { <span class="kw">color</span>: <span class="cn">#ba2121</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* Documentation */</span></a>
+<a class="sourceLine" id="cb5-44" title="44"><span class="fu">.sourceCode</span> span<span class="fu">.an</span> { <span class="kw">color</span>: <span class="cn">#60a0b0</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* Annotation */</span></a>
+<a class="sourceLine" id="cb5-45" title="45"><span class="fu">.sourceCode</span> span<span class="fu">.cv</span> { <span class="kw">color</span>: <span class="cn">#60a0b0</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* CommentVar */</span></a>
+<a class="sourceLine" id="cb5-46" title="46"><span class="fu">.sourceCode</span> span<span class="fu">.in</span> { <span class="kw">color</span>: <span class="cn">#60a0b0</span><span class="op">;</span> <span class="kw">font-weight</span>: <span class="dv">bold</span><span class="op">;</span> <span class="kw">font-style</span>: <span class="dv">italic</span><span class="op">;</span> } <span class="co">/* Information */</span></a></code></pre></div>
+<p>把上面的部分加入到<code>$sitedir/templates/default.html</code>中。</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode html"><code class="sourceCode html"><a class="sourceLine" id="cb6-1" title="1"><span class="kw">&lt;link</span><span class="ot"> rel=</span><span class="st">&quot;stylesheet&quot;</span><span class="ot"> href=</span><span class="st">&quot;/css/syntax.css&quot;</span> <span class="kw">/&gt;</span></a></code></pre></div>
+<p>Hakyll通过pandoc进行语法解析并打html tag，然后根据语法的css文件做高亮，但我感觉pandoc的解析总是有点问题。比如文章中这段：</p>
+<div style="float:center">
+<p><img src="/images/pandoc-syntax-fail.png" style="width:70.0%" /></p>
+</div>
+<p>高亮颜色就不对。只能以后自己慢慢调整了。</p>
+<h2 id="hakyll与docker-githubcircleci的集成">Hakyll与Docker, Github，CircleCI的集成</h2>
+<p>最后，我需要将站点与github pages同步，参考了 <em>Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI</em> <a href="#fn3" class="footnote-ref" id="fnref3"><sup>3</sup></a> 以及 <em>How to Hakyll CircleCI 2.0</em> <a href="#fn4" class="footnote-ref" id="fnref4"><sup>4</sup></a>。</p>
+<h3 id="设置github-pages项目">设置Github Pages项目</h3>
+<p>Github Pages只支持在master branch下的博客站点，而hakyll build后生成的静态站点文件都在<code>$sitedir/_site</code>目录下。文章中用的解决方法是建一个名为<code>hakyll</code>的分支，将本地的源文件推到该分支下。再通过CircleCI脚本编译后，将<code>./_site</code>目录推到master分支下。</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb7-1" title="1">$ <span class="fu">mkdir</span> username.github.io/</a>
+<a class="sourceLine" id="cb7-2" title="2">$ <span class="bu">cd</span> username.github.io/</a>
+<a class="sourceLine" id="cb7-3" title="3">$ <span class="fu">git</span> init</a>
+<a class="sourceLine" id="cb7-4" title="4">$ <span class="fu">git</span> commit --allow-empty -m <span class="st">&quot;Create master branch&quot;</span></a>
+<a class="sourceLine" id="cb7-5" title="5">$ <span class="fu">git</span> remote add origin git@github.com:username/username.github.io.git</a>
+<a class="sourceLine" id="cb7-6" title="6">$ <span class="fu">git</span> push -u origin master</a>
+<a class="sourceLine" id="cb7-7" title="7"></a>
+<a class="sourceLine" id="cb7-8" title="8">$ <span class="fu">git</span> checkout --orphan hakyll</a>
+<a class="sourceLine" id="cb7-9" title="9"></a>
+<a class="sourceLine" id="cb7-10" title="10">$ <span class="fu">git</span> submodule add git@github.com:username/username.github.io.git _site</a>
+<a class="sourceLine" id="cb7-11" title="11">$ <span class="fu">git</span> commit -m <span class="st">&quot;Create hakyll branch&quot;</span></a>
+<a class="sourceLine" id="cb7-12" title="12">$ <span class="fu">git</span> push -u origin hakyll</a></code></pre></div>
+<h3 id="创建自己的docker-image">创建自己的docker image</h3>
+<p>CircleCI可以对静态站点进行编译并将结果推送至github。然而编译之前需要安装ghc/cabal以及hakyll的库，这个过程会很费时间。因此在集成CircleCI之前，需要先建立一个自己的docker image，将编译所需要的库文件都放进去，节约CircleCI build的时间。</p>
+<p>如何安装docker不赘述了，可以参考官方的文档<a href="https://docs.docker.com/install/linux/docker-ce/debian/">Get Docker CE for Debian</a>。用了一台debian的vps做这个事情。</p>
+<p>docker安装好后，编写自己的Dockerfile拉取官方的docker image（我使用的是library/haskell），并加入hakyll库。这些步骤保存在Dockerfile里。</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode dockerfile"><code class="sourceCode dockerfile"><a class="sourceLine" id="cb8-1" title="1"><span class="kw">FROM</span> haskell</a>
+<a class="sourceLine" id="cb8-2" title="2"></a>
+<a class="sourceLine" id="cb8-3" title="3"><span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y ssh &amp;&amp; apt-get install git</a>
+<a class="sourceLine" id="cb8-4" title="4"></a>
+<a class="sourceLine" id="cb8-5" title="5"><span class="kw">RUN</span> cabal update</a>
+<a class="sourceLine" id="cb8-6" title="6"><span class="kw">RUN</span> cabal install hakyll -j1</a>
+<a class="sourceLine" id="cb8-7" title="7"></a>
+<a class="sourceLine" id="cb8-8" title="8"><span class="kw">WORKDIR</span> /home</a></code></pre></div>
+<p>按Dockerfile建立镜像：</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb9-1" title="1">$ <span class="ex">docker</span> build .</a></code></pre></div>
+<p>最后将docker image推送到docker hub，供CircleCI拉取。</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb10-1" title="1">$ <span class="ex">docker</span> login</a>
+<a class="sourceLine" id="cb10-2" title="2">$ <span class="ex">docker</span> push obeliskgolem/hakyll-cabal-image</a></code></pre></div>
+<h3 id="与circleci的集成">与CircleCI的集成</h3>
+<p>CircleCI与Github的集成也不过多赘述了，完成后编辑.circleci/config.yml文件，为CircleCI指定编译任务。</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode yaml"><code class="sourceCode yaml"><a class="sourceLine" id="cb11-1" title="1"><span class="fu">version:</span><span class="at"> </span><span class="dv">2</span></a>
+<a class="sourceLine" id="cb11-2" title="2"><span class="fu">jobs:</span></a>
+<a class="sourceLine" id="cb11-3" title="3">  <span class="fu">build:</span></a>
+<a class="sourceLine" id="cb11-4" title="4">    <span class="fu">docker:</span></a>
+<a class="sourceLine" id="cb11-5" title="5">      <span class="kw">-</span> <span class="fu">image:</span><span class="at"> obeliskgolem/hakyll-cabal-image</span></a>
+<a class="sourceLine" id="cb11-6" title="6">    <span class="fu">steps:</span></a>
+<a class="sourceLine" id="cb11-7" title="7">      <span class="co"># checkout the code in Github Pages project</span></a>
+<a class="sourceLine" id="cb11-8" title="8">      <span class="kw">-</span> checkout</a>
+<a class="sourceLine" id="cb11-9" title="9"></a>
+<a class="sourceLine" id="cb11-10" title="10">      <span class="kw">-</span> <span class="fu">run:</span></a>
+<a class="sourceLine" id="cb11-11" title="11">          <span class="fu">name:</span><span class="at"> Generate Static Site</span></a>
+<a class="sourceLine" id="cb11-12" title="12">          <span class="fu">command:</span><span class="at"> cabal run site build</span></a>
+<a class="sourceLine" id="cb11-13" title="13"></a>
+<a class="sourceLine" id="cb11-14" title="14">      <span class="kw">-</span> <span class="fu">run:</span></a>
+<a class="sourceLine" id="cb11-15" title="15">          <span class="fu">name:</span><span class="at"> Publish GitHub Pages</span></a>
+<a class="sourceLine" id="cb11-16" title="16">          <span class="fu">working_directory:</span><span class="at"> </span><span class="st">&#39;./_site&#39;</span></a>
+<a class="sourceLine" id="cb11-17" title="17"><span class="fu">          command:</span> <span class="st">|</span></a>
+<a class="sourceLine" id="cb11-18" title="18">            # initalize repo</a>
+<a class="sourceLine" id="cb11-19" title="19">            git init</a>
+<a class="sourceLine" id="cb11-20" title="20">            git config user.name  &#39;obeliskgolem&#39;</a>
+<a class="sourceLine" id="cb11-21" title="21">            git config user.email &#39;obeliskgolem@circleci.com&#39;</a>
+<a class="sourceLine" id="cb11-22" title="22">            # add generated files</a>
+<a class="sourceLine" id="cb11-23" title="23">            git add .</a>
+<a class="sourceLine" id="cb11-24" title="24">            git commit -m &quot;publish $CIRCLE_SHA1 [ci skip]&quot;</a>
+<a class="sourceLine" id="cb11-25" title="25">            # push to pages branch</a>
+<a class="sourceLine" id="cb11-26" title="26">            git remote add origin &quot;$CIRCLE_REPOSITORY_URL&quot;</a>
+<a class="sourceLine" id="cb11-27" title="27">            git push --force origin master</a></code></pre></div>
+<p>最后，将本地的站点源代码推送至Github仓库的hakyll分支：</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb12-1" title="1">$ <span class="fu">git</span> add --all</a>
+<a class="sourceLine" id="cb12-2" title="2">$ <span class="fu">git</span> commit -m <span class="st">&quot;circle ci integration&quot;</span></a>
+<a class="sourceLine" id="cb12-3" title="3">$ <span class="fu">git</span> push origin hakyll</a></code></pre></div>
+<p>经CircleCI编译后，静态站点被输出到<code>_site</code>目录。</p>
+<p><img src="/images/circleci-result.png" style="width:70.0%" /></p>
+<p>大功告成！</p>
+<p><img src="/images/blog-screenshot.png" style="width:100.0%" /></p>
+<h2 id="todos">TODOs</h2>
+<ol type="1">
+<li>加入草稿功能</li>
+<li>加入评论功能</li>
+<li>自动生成rss feed</li>
+<li>pandoc语法解析改进</li>
+</ol>
+<h2 id="参考文献及一些可能有帮助的文档">参考文献，及一些可能有帮助的文档</h2>
+<p><a href="http://mark.reid.name/blog/switching-to-hakyll.html">Switching from Jekyll to Hakyll</a></p>
+<p><a href="https://github.com/haskell/ghcup">ghcup</a></p>
+<p><a href="https://github.com/haskell/cabal/issues/2546">ghc/cabal build out of memory</a></p>
+<p><a href="https://ieevee.com/tech/2017/10/19/ssh-over-socks5.html">ssh over socks5</a></p>
+<p><a href="https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker">https://thoughtbot.com/blog/easy-haskell-development-and-deployment-with-docker</a></p>
+<p><a href="https://futtetennismo.me/posts/hakyll/2017-10-22-deploying-to-github-pages-using-circleci-2.0.html">Deploying a Hakyll website using Github Pages and CircleCI 2.0</a></p>
+<p><a href="https://gaumala.com/posts/2019-01-22-continuous-integration-with-circle-ci.html">Integration with Circle CI</a></p>
+<p><a href="https://github.com/jeffbr13/benjeffrey.com/blob/master/posts/pandoc-syntax-highlighting-css.md">Pandoc Syntax Highlighting with CSS description</a></p>
+<section class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p><a href="https://jaspervdj.be/hakyll/index.html">Hakyll Homepage</a><a href="#fnref1" class="footnote-back">↩</a></p></li>
+<li id="fn2"><p><a href="http://katychuang.com/hakyll-cssgarden/gallery/">Hakyll CSS Garden</a><a href="#fnref2" class="footnote-back">↩</a></p></li>
+<li id="fn3"><p><a href="https://www.stackbuilders.com/news/dr-hakyll-create-a-github-page-with-hakyll-and-circleci">Dr. Hakyll: Create a GitHub page with Hakyll and CircleCI</a><a href="#fnref3" class="footnote-back">↩</a></p></li>
+<li id="fn4"><p><a href="https://nazarii.bardiuk.com/posts/hakyll-circle.html">How to Hakyll CircleCI 2.0</a><a href="#fnref4" class="footnote-back">↩</a></p></li>
+</ol>
+</section>]]></description>
+    <pubDate>Thu, 28 Feb 2019 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2019-02-28-building-hakyll-site-1.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+<item>
+    <title>Icinga2 安装手记</title>
+    <link>https://obeliskgolem.github.io/posts/2018-05-09-icinga2_installation.html</link>
+    <description><![CDATA[<p>Icinga 2 是一个基于Nagios插件之上的一个监控框架。</p>
+<!--more-->
+<h2 id="安装指令">安装指令</h2>
+<p>For CentOS 7</p>
+<p>查看操作系统版本： <code>lsb_release -a</code></p>
+<p>安装Icinga仓库 <code>yum install epel-release</code></p>
+<p>安装Icinga2:</p>
+<pre><code># yum install icinga2
+# systemctl enable icinga2
+# systemctl start icinga2</code></pre>
+<p>安装插件 <code># yum install nagios-plugins-all</code></p>
+<h2 id="运行icinga">运行Icinga</h2>
+<p>首先需要启动，centos使用systemd管理icinga2的服务 <code># systemctl status icinga2</code></p>
+<p>通过systemd设置icinga2的自启动</p>
+<pre><code>#/etc/systemd/system/icinga2.service.d/override.conf
+
+[Service]
+Restart=always
+RestartSec=1
+StartLimitInterval=10
+StartLimitBurst=3</code></pre>
+<p>重新加载systemctl配置 <code>systemctl daemon-reload &amp;&amp; systemctl restart icinga2</code></p>
+<p>安装icinga2专用的SELinux <code>yum install icinga2-selinux</code></p>
+<p>配置语法高亮 <code>yum install vim-icinga2</code></p>
+<h2 id="安装-icinga-web-2">安装 Icinga Web 2</h2>
+<p>安装mysql</p>
+<pre><code># yum install mariadb-server mariadb
+# systemctl enable mariadb
+# systemctl start mariadb
+# mysql_secure_installation</code></pre>
+<p>安装icinga2的IDM模块（Icinga Data Output） <code># yum install icinga2-ido-mysql</code></p>
+<p>在mysql中建立用户及表</p>
+<pre><code>mysql&gt;  CREATE DATABASE icinga;
+mysql&gt;  GRANT SELECT, INSERT, UPDATE, DELETE, DROP, CREATE VIEW, INDEX, EXECUTE ON icinga.* TO &#39;icinga&#39;@&#39;localhost&#39; IDENTIFIED BY &#39;icinga&#39;;
+mysql&gt; quit</code></pre>
+<p>导入数据库schema <code># mysql -u root -p icinga &lt; /usr/share/icinga2-ido-mysql/schema/mysql.sql</code></p>
+<p>启用 IDO MySQL Module并重启icinga服务 <code># icinga2 feature enable ido-mysql</code> <code># systemctl restart icinga2</code></p>
+<p>防火墙规则</p>
+<pre><code># firewall-cmd --add-service=http
+# firewall-cmd --permanent --add-service=http</code></pre>
+<p>启用Icinga的REST API <code># icinga2 api setup</code></p>
+<pre><code># vim /etc/icinga2/conf.d/api-users.conf
+
+object ApiUser &quot;icingaweb2&quot; {
+  password = &quot;Wijsn8Z9eRs5E25d&quot;
+  permissions = [ &quot;status/query&quot;, &quot;actions/*&quot;, &quot;objects/modify/*&quot;, &quot;objects/query/*&quot; ]
+}</code></pre>
+<p>安装Icinga Web2 <code>yum install icingaweb2 icingacli</code></p>
+<p>安装SELinux for Icinga Web2 <code>yum install centos-release-scl</code> <code>yum install icingaweb2-selinux</code></p>
+<p>安装Web Server</p>
+<pre><code>yum install httpd
+systemctl start httpd.service
+systemctl enable httpd.service</code></pre>
+<p>启用PHP-FPM</p>
+<pre><code>systemctl start rh-php71-php-fpm.service
+systemctl enable rh-php71-php-fpm.service</code></pre>
+<p>在<code>/etc/opt/rh/rh-php71/php.ini</code>中设置<code>date.timezone = Asia/Shanghai</code></p>
+<p>安装ImageMagick <code># yum install ImageMagick</code></p>
+<p>打开页面 http://127.0.0.1/icingaweb2/setup 完成剩下的设置</p>
+<p><strong><em>重启Icinga服务，大功告成！</em></strong></p>
+<h2 id="附从本地仓库安装icinga2">附：从本地仓库安装Icinga2</h2>
+<p>首先需要从互联网上下载所有Icinga2的包 根据<code>/etc/yum.repos.d/ICINGA-release.repo</code>定义的yum源进行下载。</p>
+<p>定义centos的源，然后用repotrack将Icinga包及其依赖的包全部抓下来。并用这些包建立一个新的yum repo。</p>
+<pre><code>repotrack -r epel-6 -r base-6 -r updates-6 -r extras-6 -r centosplus-6 -r icinga-stable-release-el6 nagios-4.3.4-7.el6.x86_64 nagios-plugins-all-2.2.1-4git.el6.x86_64 icinga2-2.8.4-1.el6.icinga.x86_64.rpm
+
+createrepo icinga-stable-release</code></pre>
+<pre><code>sftp XXX@aaa.bbb.ccc.ddd:/home/icinga2
+
+sftp&gt; mkdir icinga_repo
+sftp&gt; put -r icinga_repo</code></pre>
+<h2 id="参考文档">参考文档</h2>
+<p><a href="https://www.icinga.com/docs/icinga2/latest/doc/02-getting-started/">Icinga2 官方安装教程</a></p>
+<p><a href="https://www.icinga.com/docs/icingaweb2/latest/doc/02-Installation/">Icinga Web2 官方安装教程</a></p>
+<p><a href="https://www.icinga.com/docs/icinga2/latest/doc/13-addons/#addons">插件配置</a></p>]]></description>
+    <pubDate>Wed, 09 May 2018 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2018-05-09-icinga2_installation.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+<item>
+    <title>Haskell 自学笔记1：Functor, Applicative Functor, Monoid, Monad</title>
+    <link>https://obeliskgolem.github.io/posts/2018-04-01-learning-haskell-1.html</link>
+    <description><![CDATA[<p>光看书，这些概念实在是有点绕，借用GitHub Pages整理归纳一下。初学Haskell，还没怎么正式用过，理解上的偏差无可避免。如果有任何错误或遗漏，在后续的博客中改正。</p>
+<p>以下内容主要参考 <em>Learn you a Haskell for great good</em><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>.</p>
+<!--more-->
+<h2 id="什么是functor函子">什么是Functor（函子）？</h2>
+<p>Functor指的是一个容器所具有的某种性质：这个容器实现了一个称为fmap的函数，可以将某个单参数函数提升为对容器中的元素操作的函数。即：把一个函数应用到容器内部。</p>
+<p>如果说容器是一个上下文环境，那么fmap使得你可以将一个上下文无关的函数应用到这个容器，也即：fmap是函数的上下文相关版本。</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" title="1"><span class="kw">class</span> <span class="dt">Functor</span> f <span class="kw">where</span></a>
+<a class="sourceLine" id="cb1-2" title="2"><span class="ot">	fmap ::</span> (a<span class="ot">-&gt;</span>b) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> f b</a></code></pre></div>
+<h3 id="从范畴论到functor">从范畴论到Functor</h3>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Category_theory">范畴论的数学基础</a></p>
+<p>范畴的三个组成部分</p>
+<ol type="1">
+<li>对象</li>
+<li>态射，用以连接范畴中的两个对象</li>
+<li>态射的复合，用以将多个态射组合到一起</li>
+</ol>
+<p>范畴的三个定律</p>
+<ol type="1">
+<li>态射需要满足结合律，即：<code>f.(g.h) = (f.g).h</code></li>
+<li>范畴对于态射的复合来说是封闭的，即：若 <code>f</code>, <code>g</code> 属于某范畴，则<code>f.g</code>也属于该范畴</li>
+<li>对每个范畴中的对象，都存在一个恒等的态射</li>
+</ol>
+<h3 id="haskell的范畴hask">Haskell的范畴：Hask</h3>
+<p>Haskell的所有类型types，对应Hask的objects。Haskell的所有函数functions，对应Hask的morphisms</p>
+<p>范畴论中的函子F是范畴到范畴的变换(transformation)。给定函子 <code>F: C -&gt; D</code>，<code>F</code> 应该： 1. 将C中的所有object映射到 <code>D：A -&gt; F(A)</code>，这个在Hask中对应类型构造器 2. C中的所有态射也映射到 <code>D：f -&gt; F(f)</code>，在Hask中对应高阶函数</p>
+<h3 id="函子的定律">函子的定律</h3>
+<p>函子应该满足两条定律： 1. 范畴<code>C</code>中，任意对象<code>A</code>上的恒等变换<code>id(A)</code>，可以通过F变换为范畴<code>D</code>中的恒等变换，即 <code>F(id(A)) = id(F(A))</code> 2. 函子对于态射的复合应该满足分配律，即：<code>F(f.g) = F(f).F(g)</code></p>
+<p>Haskell中的函子实际上是从范畴Hask到范畴func的一个变换，其中func是通过函子所定义的一个Hask的子范畴。 对象到对象的映射已经通过函子f完成了，而态射到态射的映射则是通过函子f的一个接口：即前面提到的fmap</p>
+<p>范畴论中函子的两条定律，对Haskell中的函子依然适用： 1. 恒等变换：<code>fmap id = id</code> 2. 分配律：<code>fmap (f.g) = fmap f.fmap g</code></p>
+<h2 id="什么是applicative-functor应用型函子">什么是Applicative Functor（应用型函子）？</h2>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">class</span> (<span class="dt">Functor</span> f) <span class="ot">=&gt;</span> <span class="dt">Applicative</span> f <span class="kw">where</span></a>
+<a class="sourceLine" id="cb2-2" title="2">	<span class="fu">pure</span><span class="ot"> a ::</span> f a</a>
+<a class="sourceLine" id="cb2-3" title="3"><span class="ot">	(&lt;*&gt;) ::</span> f (a <span class="ot">-&gt;</span> b) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> f b</a></code></pre></div>
+<p>对于范畴<code>C</code>内的函数<code>(a -&gt; b)</code> ，我们有函子可以将它应用于范畴<code>D</code>。但如果我们只有范畴<code>D</code>内的函数<code>f(a -&gt; b)</code>呢？能不能将它也应用于范畴<code>D</code>呢？</p>
+<p>Applicative Functor指的是这样一个容器：它除了具有Functor类型容器的性质外，你还可以 1. 将任意类型用该容器封装。记住functor实际上是个类型的构造器，接受类型作为参数。 2. 对于一个容器内部的函数，你可以将它拿出来并应用于容器内的元素</p>
+<p>所以对于Applicative Functor函子，你既可以将外部的普通函数提升为应用于容器元素的函数（满足函子的定义），也可以将容器内部存在的函数拿出来，将其应用于容器元素。另外，pure函数的存在让你可以将任意类型放入容器中，这个任意类型当然也包括函数类型。</p>
+<p>Applicative Functor有用的地方在于，它可以存放类型，也可以存放类型到类型的映射。它的应用范围比functor大了很多。</p>
+<p>考虑所有的a, b, 以及(a -&gt; b), 它们组成一个范畴<code>C</code>。所有的<code>f a</code>, <code>f b</code>, 以及<code>f (a -&gt; b)</code>，它们也组成一个范畴 <code>C'</code>。而<code>Applicative Functor f</code>就是范畴 <code>C</code> 到 <code>C'</code> 的映射。</p>
+<h3 id="applicative函子的定律">Applicative函子的定律</h3>
+<p>就像函子一样，Applicative函子也有需要满足的定律，它们是</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" title="1"><span class="fu">pure</span> <span class="fu">id</span> <span class="op">&lt;*&gt;</span> v <span class="ot">=</span> v                            <span class="co">-- 恒等</span></a>
+<a class="sourceLine" id="cb3-2" title="2"><span class="fu">pure</span> f <span class="op">&lt;*&gt;</span> <span class="fu">pure</span> x <span class="ot">=</span> <span class="fu">pure</span> (f x)               <span class="co">-- 同态</span></a>
+<a class="sourceLine" id="cb3-3" title="3">u <span class="op">&lt;*&gt;</span> <span class="fu">pure</span> y <span class="ot">=</span> <span class="fu">pure</span> (<span class="op">$</span> y) <span class="op">&lt;*&gt;</span> u              <span class="co">-- 交换</span></a>
+<a class="sourceLine" id="cb3-4" title="4"><span class="fu">pure</span> (<span class="op">.</span>) <span class="op">&lt;*&gt;</span> u <span class="op">&lt;*&gt;</span> v <span class="op">&lt;*&gt;</span> w <span class="ot">=</span> u <span class="op">&lt;*&gt;</span> (v <span class="op">&lt;*&gt;</span> w) <span class="co">-- 复合</span></a></code></pre></div>
+<p>另外，还有一条关于 <code>fmap</code>的性质：</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" title="1"><span class="fu">fmap</span> f x <span class="ot">=</span> <span class="fu">pure</span> f <span class="op">&lt;*&gt;</span> x                      <span class="co">-- fmap</span></a></code></pre></div>
+<h3 id="applicative函子的用途">Applicative函子的用途</h3>
+<p>因为没什么深刻的体会，这里具体的用途只能留待日后补全。书中主要讲了两个使用到应用型函子的地方：<code>liftA2</code>和<code>sequenceA</code>。</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" title="1"><span class="ot">liftA2 ::</span> (<span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> c) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> f b <span class="ot">-&gt;</span> f c</a>
+<a class="sourceLine" id="cb5-2" title="2">liftA2 f a b <span class="ot">=</span> f <span class="op">&lt;$&gt;</span> a <span class="op">&lt;*&gt;</span> b</a>
+<a class="sourceLine" id="cb5-3" title="3"></a>
+<a class="sourceLine" id="cb5-4" title="4"><span class="fu">sequenceA</span><span class="ot"> ::</span> (<span class="dt">Applicative</span> f) <span class="ot">=&gt;</span> [f a] <span class="ot">-&gt;</span> f [a]</a>
+<a class="sourceLine" id="cb5-5" title="5"><span class="fu">sequenceA</span> [] <span class="ot">=</span> <span class="fu">pure</span> []</a>
+<a class="sourceLine" id="cb5-6" title="6"><span class="fu">sequenceA</span> (x<span class="op">:</span>xs) <span class="ot">=</span> (<span class="op">:</span>) <span class="op">&lt;$&gt;</span> x <span class="op">&lt;*&gt;</span> <span class="fu">sequenceA</span> xs</a></code></pre></div>
+<p><code>liftA2</code>让我们可以将两个应用型函子作为容器展开，返回一个更大的容器，里面包含了对展开的元素元组应用<code>f</code>的结果。而<code>sequenceA</code>则将一个应用型函子的列表展开，返回一个用应用型函子包起来的列表。</p>
+<h2 id="什么是monad单子">什么是Monad（单子）？</h2>
+<p>Monad是一类特殊的函子，是范畴到其自身的映射，同时对于范畴中的每一个对象，它都定义了两个态射：</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" title="1">unit(x)<span class="ot"> ::</span> x <span class="ot">-&gt;</span> <span class="dt">M</span>(x)</a>
+<a class="sourceLine" id="cb6-2" title="2">join(x)<span class="ot"> ::</span> <span class="dt">M</span>(<span class="dt">M</span>(x)) <span class="ot">-&gt;</span> <span class="dt">M</span>(x)</a></code></pre></div>
+<p>这里，<code>unit(x)</code>可以认为是x从范畴C到范畴D的最小上下文映射，而<code>join(x)</code>则是将范畴D中的对象展平。</p>
+<p>Haskell中的单子一般通过下面的方式定义：</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb7-1" title="1"><span class="kw">class</span> (<span class="dt">Functor</span> m) <span class="ot">=&gt;</span> <span class="dt">Monad</span> m <span class="kw">where</span></a>
+<a class="sourceLine" id="cb7-2" title="2"><span class="ot">	return ::</span> x <span class="ot">-&gt;</span> m x</a>
+<a class="sourceLine" id="cb7-3" title="3">	x <span class="op">&gt;&gt;=</span><span class="ot"> f ::</span> m a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> m b) <span class="ot">-&gt;</span> m b</a></code></pre></div>
+<p>虽然形式不同，但可以通过一些变换证明，join和绑定&gt;&gt;=是等价的</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" title="1">join x <span class="ot">=</span> x <span class="op">&gt;&gt;=</span> <span class="fu">id</span></a></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" title="1">x <span class="op">&gt;&gt;=</span> f <span class="ot">=</span> join (<span class="fu">fmap</span> f x)</a></code></pre></div>
+<h3 id="monad需要满足的定律">Monad需要满足的定律</h3>
+<p>Haskell中Monads需要满足如下定律</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" title="1">m <span class="op">&gt;&gt;=</span> <span class="fu">return</span>     <span class="ot">=</span>  m                        <span class="co">--右单位元</span></a>
+<a class="sourceLine" id="cb10-2" title="2"><span class="fu">return</span> x <span class="op">&gt;&gt;=</span> f   <span class="ot">=</span>  f x                      <span class="co">--左单位元</span></a>
+<a class="sourceLine" id="cb10-3" title="3">(m <span class="op">&gt;&gt;=</span> f) <span class="op">&gt;&gt;=</span> g  <span class="ot">=</span>  m <span class="op">&gt;&gt;=</span> (\x <span class="ot">-&gt;</span> f x <span class="op">&gt;&gt;=</span> g)  <span class="co">--结合律</span></a></code></pre></div>
+<h2 id="什么是monoid幺半群">什么是Monoid（幺半群）？</h2>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb11-1" title="1"><span class="kw">class</span> <span class="dt">Monoid</span> a <span class="kw">where</span></a>
+<a class="sourceLine" id="cb11-2" title="2"><span class="ot">    mempty  ::</span> a</a>
+<a class="sourceLine" id="cb11-3" title="3"><span class="ot">    mappend ::</span> a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb11-4" title="4"></a>
+<a class="sourceLine" id="cb11-5" title="5"><span class="ot">    mconcat ::</span> [a] <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb11-6" title="6">    <span class="fu">mconcat</span> <span class="ot">=</span> <span class="fu">foldr</span> <span class="fu">mappend</span> <span class="fu">mempty</span></a></code></pre></div>
+<p><code>Monoid</code> 是一个包含二元操作符和单位元的类型类，其中二元操作符mappend需要满足结合律。</p>
+<p>为什么要搞这么个概念呢？暂时还无法理解，只能安慰自己说Haskell习惯把能抽象的概念都抽象了……</p>
+<p>书中一个比较nb的例子是<code>Ordering</code>，它也是个 <code>Monoid</code> ！</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb12-1" title="1"><span class="kw">data</span> <span class="dt">Ordering</span> <span class="ot">=</span> <span class="dt">LT</span> <span class="op">|</span> <span class="dt">EQ</span> <span class="op">|</span> <span class="dt">GT</span></a>
+<a class="sourceLine" id="cb12-2" title="2"></a>
+<a class="sourceLine" id="cb12-3" title="3"><span class="kw">instance</span> <span class="dt">Monoid</span> <span class="dt">Ordering</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb12-4" title="4">	<span class="fu">mempty</span> <span class="ot">=</span> <span class="dt">EQ</span></a>
+<a class="sourceLine" id="cb12-5" title="5">	<span class="dt">LT</span> <span class="ot">`mappend`</span> _ <span class="ot">=</span> <span class="dt">LT</span></a>
+<a class="sourceLine" id="cb12-6" title="6">	<span class="dt">EQ</span> <span class="ot">`mappend`</span> y <span class="ot">=</span> y</a>
+<a class="sourceLine" id="cb12-7" title="7">	<span class="dt">GT</span> <span class="ot">`mappend`</span> _ <span class="ot">=</span> <span class="dt">GT</span></a></code></pre></div>
+<p><code>Ordering</code>是 <code>Monoid</code> 的事实实际上体现了一个分优先级的比较。要比较a和b，先比较a1和b1。a和b的大小首先取决于a1 b1，以此类推。</p>
+<h2 id="一些问题待以后解决">一些问题待以后解决</h2>
+<p><code>(&gt;&gt;=)</code> 为什么接受 <code>(a -&gt; m b)</code> 而不是 <code>(m a -&gt; m b)</code>？</p>
+<p>applcative和monad的区别？</p>
+<h2 id="总结">总结</h2>
+<p>写完这篇博客，还是感觉自己对这几个概念一知半解。虽然很想在理解的更透彻一些后总结，但暂时就此打住吧。期待以后有了更多的实践经验后再来补充。</p>
+<h2 id="参考文献">参考文献</h2>
+<p><a href="https://en.wikibooks.org/wiki/Haskell/Category_theory">Haskell/Category theory</a></p>
+<p><a href="https://wiki.haskell.org/Monads_as_containers">Monads As Containers</a></p>
+<p><a href="https://bartoszmilewski.com/2011/01/09/monads-for-the-curious-programmer-part-1/">Monads for Curious Programmers</a></p>
+<p><a href="http://www.staff.city.ac.uk/~ross/papers/Applicative.pdf">Applicative programming with effects</a></p>
+<section class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p><a href="http://learnyouahaskell.com/">Learn You a Haskell for Great Good</a><a href="#fnref1" class="footnote-back">↩</a></p></li>
+</ol>
+</section>]]></description>
+    <pubDate>Sun, 01 Apr 2018 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2018-04-01-learning-haskell-1.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+<item>
+    <title>GitHub Pages Initiates</title>
+    <link>https://obeliskgolem.github.io/posts/2018-03-20-github-pages-initiates.html</link>
+    <description><![CDATA[<p>Blogger，打开</p>
+<p>代码，插入</p>
+<p>格式，不对</p>
+<p>google，搜索</p>
+<p>文档，放弃</p>
+<p>blogger，卸载</p>
+<p>jekyll，安装</p>
+<p>主题，挑选</p>
+<p>github pages，启动</p>
+<!--more-->]]></description>
+    <pubDate>Tue, 20 Mar 2018 00:00:00 UT</pubDate>
+    <guid>https://obeliskgolem.github.io/posts/2018-03-20-github-pages-initiates.html</guid>
+    <dc:creator>obeliskgolem</dc:creator>
+</item>
+
+    </channel>
+</rss>
