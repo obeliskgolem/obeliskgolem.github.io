@@ -303,12 +303,83 @@ EmptyList :: TypeLevelList 'AEmpty
 [Higher-order Type-level Programmingin Haskell](https://www.imperial.ac.uk/media/imperial-college/faculty-of-engineering/computing/public/1718-ug-projects/Csongor-Kiss-Higher-order-type-level-programming-in-Haskell.pdf)
 
 # TypeFamilies
-TODO
 
+Type Family是一种介于具体的类型（如`Int`，`Bool`）和多态类型（如`Maybe a`）之间的类型集合，允许有限程度的多态。`TypeFamilies`扩展一般指对两种语法的支持：
 
+1. `data family`：定义一组数据类型的集合
+2. `type family`：定义类型同义词(type synonym)的集合，可以理解为***类型化简***
 
+``` haskell
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE KindSignatures #-}
 
-# 参考
+import Data.IntMap
+
+data family PairData a :: * -> *    -- PairData a是一个data family，表示一组(* -> *)的类型
+
+data instance PairData Int  b = PairInt (IntMap b)
+                                    -- a为Int时对应PairInt构造器，接受一个IntMap
+data instance PairData Bool b = PairBool b
+                                    -- a为Bool时对应PairBool构造器
+
+type family Elem c
+type instance Elem [e] = e
+```
+
+注意`data family`需要在typeclass中使用，不能直接用于普通函数。
+
+*Even if data families are defined as toplevel declarations, functions that perform different computations for different family instances may still need to be defined as methods of type classes.*
+
+``` haskell
+class UsePairData a where
+  usePairData :: PairData a b -> a -> Maybe b
+
+instance UsePairData Int where
+  usePairData (PairInt m) key = Data.IntMap.lookup key m
+
+instance UsePairData Bool where
+  usePairData (PairBool t) cond = if fst t then Just (snd t) else Nothing
+```
+
+也可以在typeclass中定义`data family`和`type family`，此时`family`和`instance`可省略。另外，在typeclass中的`data family`和`type family`只能使用typeclass定义时声明的类型变量。例如
+
+``` haskell
+class UsePairData a where
+  data PairData a :: * -> *
+  -- data WrongPairData a b :: * -> * 
+  -- won't type check since b is unknown to the type class
+  usePairData :: PairData a b -> a -> Maybe b
+
+instance UsePairData Int where
+  data PairData Int  b = PairInt (IntMap b)
+  usePairData (PairInt m) key = Data.IntMap.lookup key m
+
+instance UsePairData Bool where
+  data PairData Bool  b = PairBool b
+  usePairData (PairBool b) cond = if cond then Just b else Nothing
+
+class UseElem c where
+  type Elem c
+  listHead :: c -> Elem c
+
+instance UseElem [c] where
+  type Elem [c] = c
+  listHead = head
+```
+
+*上面的例子举得有点简单，但我一时半会写不出原创的复杂的例子……*
+
+可以参考：
+
+[GHC Manual: TypeFamilies](https://downloads.haskell.org/~ghc/8.8.1/docs/html/users_guide/glasgow_exts.html#type-families)
+
+[GHC/Type families](https://wiki.haskell.org/GHC/Type_families)
+
+[Type Checking with Open Type Functions](https://www.microsoft.com/en-us/research/wp-content/uploads/2008/01/icfp2008.pdf)
+
+[Type Families](http://dev.stephendiehl.com/hask/#type-families)
+
+# 其他参考
 
 [The Future of Programming is Dependent Types — Programming Word of the Day](https://medium.com/background-thread/the-future-of-programming-is-dependent-types-programming-word-of-the-day-fcd5f2634878)
 
@@ -317,6 +388,8 @@ TODO
 [Intuitionistic Type Theory](https://plato.stanford.edu/entries/type-theory-intuitionistic/)
 
 [Research papers/Type systems](https://wiki.haskell.org/Research_papers/Type_systems)
+
+[Dependent Types in Haskell](https://www.schoolofhaskell.com/user/konn/prove-your-haskell-for-great-safety/dependent-types-in-haskell)
 
 
 >This post is highly inspired by Ollie Charles's *24 Days of GHC Extensions* series. See also:

@@ -1,4 +1,4 @@
-div.sourceCode { overflow-x: auto ; word-wrap: normal; max-width: 800px;}
+div.sourceCode { overflow-x: auto ; word-wrap: normal; max-width: auto;}
 table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
   margin: 0; padding: 0; vertical-align: baseline; border: none; }
 table.sourceCode { width: 100%; line-height: 100%; }
